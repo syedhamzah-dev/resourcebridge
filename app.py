@@ -798,6 +798,38 @@ def create_app(test_config=None):
 
         return redirect(url_for('my_bookings'))
 
+    def get_pending_conflicts_map(booking_list):
+        """
+        Batch-computes conflict indicators for all pending bookings in a single query,
+        preventing N+1 database roundtrips across manager review queues.
+        """
+        pending = [b for b in booking_list if b.status == 'pending']
+        if not pending:
+            return {}
+
+        resource_ids = {b.resource_id for b in pending}
+        min_start = min(b.start_time for b in pending)
+        max_end = max(b.end_time for b in pending)
+
+        # Bulk fetch active reservations overlapping the aggregate candidate time window
+        active_bookings = Booking.query.filter(
+            Booking.resource_id.in_(resource_ids),
+            Booking.status.in_(['approved', 'checked_in', 'return_pending']),
+            Booking.start_time < max_end,
+            Booking.end_time > min_start
+        ).all()
+
+        conflicts_map = {}
+        for pb in pending:
+            conflict = None
+            for ab in active_bookings:
+                if ab.resource_id == pb.resource_id and ab.id != pb.id:
+                    if ab.start_time < pb.end_time and ab.end_time > pb.start_time:
+                        conflict = ab
+                        break
+            conflicts_map[pb.id] = conflict
+        return conflicts_map
+
     @app.route('/manager/bookings')
     @login_required
     def manager_bookings():
@@ -826,10 +858,7 @@ def create_app(test_config=None):
             Booking.start_time.asc()
         ).all()
 
-        conflicts_map = {}
-        for b in bookings:
-            if b.status == 'pending':
-                conflicts_map[b.id] = check_booking_conflict(b.resource_id, b.start_time, b.end_time)
+        conflicts_map = get_pending_conflicts_map(bookings)
 
         return render_template(
             'bookings/manager_list.html',
@@ -885,7 +914,7 @@ def create_app(test_config=None):
             )
             query = Booking.query if current_user.is_admin else Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
             bookings = query.order_by(db.case((Booking.status == 'pending', 0), else_=1), Booking.start_time.asc()).all()
-            conflicts_map = {b.id: check_booking_conflict(b.resource_id, b.start_time, b.end_time) for b in bookings if b.status == 'pending'}
+            conflicts_map = get_pending_conflicts_map(bookings)
             return render_template(
                 'bookings/manager_list.html',
                 bookings=bookings,
@@ -941,7 +970,7 @@ def create_app(test_config=None):
             flash("A rejection reason is required so the student understands the decision.", "danger")
             query = Booking.query if current_user.is_admin else Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
             bookings = query.order_by(db.case((Booking.status == 'pending', 0), else_=1), Booking.start_time.asc()).all()
-            conflicts_map = {b.id: check_booking_conflict(b.resource_id, b.start_time, b.end_time) for b in bookings if b.status == 'pending'}
+            conflicts_map = get_pending_conflicts_map(bookings)
             return render_template(
                 'bookings/manager_list.html',
                 bookings=bookings,
@@ -1315,7 +1344,10 @@ def create_app(test_config=None):
             db_stats['total_active_resources'] = Resource.query.filter_by(status='active').count()
             db_stats['total_categories'] = db.session.query(Resource.category).distinct().count()
             db_stats['recent_resources'] = Resource.query.filter_by(status='active').order_by(Resource.id.desc()).limit(3).all()
-            db_stats['my_active_bookings'] = Booking.query.filter_by(user_id=current_user.id, status='approved').count()
+            db_stats['my_active_bookings'] = Booking.query.filter(
+                Booking.user_id == current_user.id,
+                Booking.status.in_(['approved', 'checked_in', 'return_pending'])
+            ).count()
             db_stats['my_pending_bookings'] = Booking.query.filter_by(user_id=current_user.id, status='pending').count()
             db_stats['my_recent_bookings'] = Booking.query.filter_by(user_id=current_user.id).order_by(Booking.created_at.desc()).limit(4).all()
 
@@ -1330,7 +1362,7 @@ def create_app(test_config=None):
             ).count()
             db_stats['active_reservations_count'] = Booking.query.join(Resource).filter(
                 Resource.owner_id == current_user.id,
-                Booking.status == 'approved'
+                Booking.status.in_(['approved', 'checked_in', 'return_pending'])
             ).count()
             db_stats['recent_booking_requests'] = Booking.query.join(Resource).filter(
                 Resource.owner_id == current_user.id
@@ -1344,7 +1376,9 @@ def create_app(test_config=None):
             db_stats['recent_resources'] = Resource.query.order_by(Resource.id.desc()).limit(5).all()
             db_stats['total_bookings'] = Booking.query.count()
             db_stats['pending_reviews_count'] = Booking.query.filter_by(status='pending').count()
-            db_stats['active_reservations_count'] = Booking.query.filter_by(status='approved').count()
+            db_stats['active_reservations_count'] = Booking.query.filter(
+                Booking.status.in_(['approved', 'checked_in', 'return_pending'])
+            ).count()
             db_stats['recent_booking_requests'] = Booking.query.order_by(Booking.created_at.desc()).limit(5).all()
 
         return render_template('dashboard.html', user=current_user, stats=db_stats)

@@ -7,11 +7,15 @@
     
     <div class="manage-header-row">
         <div>
-            <div class="breadcrumb-trail">
-                <a href="{{ url_for('dashboard') }}">Dashboard</a>
-                <span class="breadcrumb-separator">/</span>
-                <span>Inventory Management</span>
-            </div>
+            <nav class="breadcrumb-nav mb-2" aria-label="breadcrumb">
+                <ol class="breadcrumb-list">
+                    <li><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="separator" aria-hidden="true">/</li>
+                    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                    <li class="separator" aria-hidden="true">/</li>
+                    <li class="active" aria-current="page">Inventory Management</li>
+                </ol>
+            </nav>
             <h1 class="page-title">{{ title }}</h1>
             <p class="page-subtitle">
                 {% if current_user.is_admin %}

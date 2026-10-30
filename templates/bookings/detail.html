@@ -10,15 +10,15 @@
         <nav class="breadcrumb-nav mb-4" aria-label="breadcrumb">
             <ol class="breadcrumb-list">
                 <li><a href="{{ url_for('index') }}">Home</a></li>
-                <li class="separator">/</li>
+                <li class="separator" aria-hidden="true">/</li>
                 <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                <li class="separator">/</li>
+                <li class="separator" aria-hidden="true">/</li>
                 {% if current_user.can_manage_resources %}
                     <li><a href="{{ url_for('manager_bookings') }}">Review Queue</a></li>
                 {% else %}
                     <li><a href="{{ url_for('my_bookings') }}">My Bookings</a></li>
                 {% endif %}
-                <li class="separator">/</li>
+                <li class="separator" aria-hidden="true">/</li>
                 <li class="active" aria-current="page">#BK-{{ "%04d" | format(booking.id) }}</li>
             </ol>
         </nav>

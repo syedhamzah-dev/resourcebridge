@@ -7,13 +7,15 @@
     
     <!-- Breadcrumb & Top Navigation Bar -->
     <div class="detail-nav-row">
-        <div class="breadcrumb-trail">
-            <a href="{{ url_for('index') }}">Home</a>
-            <span class="breadcrumb-separator">/</span>
-            <a href="{{ url_for('resources_list') }}">Resource Catalogue</a>
-            <span class="breadcrumb-separator">/</span>
-            <span>{{ resource.name }}</span>
-        </div>
+        <nav class="breadcrumb-nav mb-0" aria-label="breadcrumb">
+            <ol class="breadcrumb-list">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="separator" aria-hidden="true">/</li>
+                <li><a href="{{ url_for('resources_list') }}">Resource Catalogue</a></li>
+                <li class="separator" aria-hidden="true">/</li>
+                <li class="active" aria-current="page">{{ resource.name }}</li>
+            </ol>
+        </nav>
 
         <div class="detail-top-actions">
             <a href="{{ url_for('resources_list') }}" class="btn btn-outline btn-sm">

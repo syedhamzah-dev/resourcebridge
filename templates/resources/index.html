@@ -5,14 +5,15 @@
 {% block content %}
 <div class="container py-5">
     
-    <!-- Header with Breadcrumbs & Action Button -->
     <div class="catalog-header-row">
         <div>
-            <div class="breadcrumb-trail">
-                <a href="{{ url_for('index') }}">Home</a>
-                <span class="breadcrumb-separator">/</span>
-                <span>Resource Catalogue</span>
-            </div>
+            <nav class="breadcrumb-nav mb-2" aria-label="breadcrumb">
+                <ol class="breadcrumb-list">
+                    <li><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="separator" aria-hidden="true">/</li>
+                    <li class="active" aria-current="page">Resource Catalogue</li>
+                </ol>
+            </nav>
             <h1 class="page-title">Campus Resource Discovery</h1>
             <p class="page-subtitle">
                 Explore certified laboratories, high-end production cameras, computing clusters, and workshops available across college departments.

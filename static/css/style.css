@@ -1454,15 +1454,77 @@ a:hover {
     font-size: 1.25rem;
 }
 
-/* Table */
+/* ==========================================================================
+   Breadcrumb Navigation
+   ========================================================================== */
+.breadcrumb-nav {
+    margin-bottom: 1.25rem;
+}
+
+.breadcrumb-list,
+.breadcrumb-trail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none !important;
+    list-style-type: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--brand-muted);
+}
+
+.breadcrumb-list li,
+.breadcrumb-trail span,
+.breadcrumb-trail a {
+    display: inline-flex;
+    align-items: center;
+}
+
+.breadcrumb-list li a,
+.breadcrumb-trail a {
+    color: var(--brand-muted);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.breadcrumb-list li a:hover,
+.breadcrumb-trail a:hover {
+    color: var(--brand-primary);
+    text-decoration: underline;
+}
+
+.breadcrumb-list li.separator,
+.breadcrumb-separator {
+    margin: 0 0.5rem;
+    color: #cbd5e1;
+    user-select: none;
+}
+
+.breadcrumb-list li.active,
+.breadcrumb-trail span:last-child {
+    color: var(--brand-slate);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Table & Responsive Layout
+   ========================================================================== */
 .table-responsive {
+    width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
 }
 
 .data-table {
     width: 100%;
+    min-width: 640px;
     border-collapse: collapse;
     font-size: 0.85rem;
+    text-align: left;
 }
 
 .data-table th {
@@ -2750,4 +2812,14 @@ a:hover {
 
 .border-3 {
     border-width: 3px !important;
+}
+
+/* Accessible Keyboard Navigation & Focus Rings */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
 }
