@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Review Bookings - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="page-container py-5">
+    <div class="container">
+        
+        <!-- Breadcrumb Navigation -->
+        <nav class="breadcrumb-nav mb-4" aria-label="breadcrumb">
+            <ol class="breadcrumb-list">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="separator">/</li>
+                <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="separator">/</li>
+                <li class="active" aria-current="page">Review Bookings</li>
+            </ol>
+        </nav>
+
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="page-title mb-1">
+                    {% if current_user.is_admin %}
+                        Campus-Wide Reservation Review Queue
+                    {% else %}
+                        Department Booking Review Queue
+                    {% endif %}
+                </h1>
+                <p class="text-muted mb-0">
+                    Verify student prerequisites, prevent scheduling conflicts, and record transparent approval decisions.
+                </p>
+            </div>
+            <div>
+                <a href="{{ url_for('manage_resources') }}" class="btn btn-outline btn-sm">
+                    Manage Inventory &rarr;
+                </a>
+            </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="filter-pills-bar mb-4">
+            <a href="{{ url_for('manager_bookings') }}" class="filter-pill {% if not status_filter or status_filter == 'all' %}active{% endif %}">
+                All ({{ bookings | length if (not status_filter or status_filter == 'all') else 'View All' }})
+            </a>
+            <a href="{{ url_for('manager_bookings', status='pending') }}" class="filter-pill {% if status_filter == 'pending' %}active{% endif %}">
+                Pending Review
+            </a>
+            <a href="{{ url_for('manager_bookings', status='approved') }}" class="filter-pill {% if status_filter == 'approved' %}active{% endif %}">
+                Approved
+            </a>
+            <a href="{{ url_for('manager_bookings', status='rejected') }}" class="filter-pill {% if status_filter == 'rejected' %}active{% endif %}">
+                Rejected
+            </a>
+            <a href="{{ url_for('manager_bookings', status='cancelled') }}" class="filter-pill {% if status_filter == 'cancelled' %}active{% endif %}">
+                Cancelled
+            </a>
+        </div>
+
+        <!-- Bookings Review Queue -->
+        {% if bookings %}
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="data-table" id="manager-review-table">
+                            <thead>
+                                <tr>
+                                    <th>Ref / Time</th>
+                                    <th>Resource</th>
+                                    <th>Student Requester</th>
+                                    <th>Requested Period</th>
+                                    <th>Purpose &amp; Prerequisites</th>
+                                    <th>Status / Conflict</th>
+                                    <th class="text-right">Decision Controls</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for b in bookings %}
+                                    {% set conflict = conflicts_map.get(b.id) if conflicts_map else None %}
+                                    <tr id="review-row-{{ b.id }}" class="{% if b.is_pending and conflict %}table-row-warning{% endif %}">
+                                        <td>
+                                            <span class="badge badge-default">#BK-{{ "%04d" | format(b.id) }}</span>
+                                            <div class="text-xs text-muted mt-1">{{ b.created_at.strftime('%b %d, %H:%M') }}</div>
+                                        </td>
+                                        <td>
+                                            <strong>
+                                                <a href="{{ url_for('resource_detail', resource_id=b.resource.id) }}">
+                                                    {{ b.resource.name }}
+                                                </a>
+                                            </strong>
+                                            <div class="text-xs text-muted">
+                                                📍 {{ b.resource.location }}
+                                            </div>
+                                            <div>
+                                                <span class="badge {{ b.resource.status_badge_class }} text-xs">
+                                                    {{ b.resource.status_title }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <strong>{{ b.user.name }}</strong>
+                                            <div class="text-xs text-muted">{{ b.user.email }}</div>
+                                            <div class="mt-1">
+                                                <span class="badge {{ b.user.role_badge_class }} text-xs">{{ b.user.role | capitalize }}</span>
+                                                {% if b.user.is_verified %}
+                                                    <span class="badge badge-verified text-xs">Verified</span>
+                                                {% else %}
+                                                    <span class="badge badge-warning text-xs">Unverified</span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="booking-time-block">
+                                                <strong>{{ b.start_time.strftime('%a, %b %d') }}</strong>
+                                                <div class="text-sm text-muted">
+                                                    {{ b.start_time.strftime('%H:%M') }} &rarr; {{ b.end_time.strftime('%H:%M') }}
+                                                </div>
+                                                <span class="badge badge-light text-xs">{{ b.duration_hours }} hrs</span>
+                                            </div>
+                                        </td>
+                                        <td style="max-width: 280px;">
+                                            <p class="text-sm mb-1 text-break">"{{ b.purpose }}"</p>
+                                            
+                                            <!-- Prerequisite Indicators -->
+                                            <div class="prereq-badges-stack">
+                                                {% if b.resource.training_required %}
+                                                    <span class="badge badge-warning text-xs mb-1" title="{{ b.resource.training_details }}">
+                                                        ⚠️ Training: {{ b.resource.training_details or 'Required' }}
+                                                    </span>
+                                                {% endif %}
+                                                {% if b.resource.supervision_required %}
+                                                    <span class="badge badge-purple text-xs" title="{{ b.resource.supervision_details }}">
+                                                        👥 Supervised: {{ b.resource.supervision_details or 'Required' }}
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge {{ b.status_badge_class }} mb-1">
+                                                {{ b.status_title }}
+                                            </span>
+
+                                            {% if b.is_pending and conflict %}
+                                                <div class="alert alert-danger p-2 text-xs mt-1 mb-0" role="alert">
+                                                    <strong>⚠️ Conflict Alert!</strong><br>
+                                                    Overlaps with approved #BK-{{ "%04d" | format(conflict.id) }} ({{ conflict.user.name.split(' ')[0] }}).
+                                                </div>
+                                            {% elif b.is_approved %}
+                                                <div class="text-xs text-emerald mt-1">
+                                                    ✓ By {{ b.decision_maker.name if b.decision_maker else 'Manager' }}
+                                                </div>
+                                            {% elif b.is_rejected %}
+                                                <div class="text-xs text-danger-custom mt-1">
+                                                    ✕ {{ b.rejection_reason }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-right">
+                                            {% if b.is_pending and b.can_be_managed_by(current_user) %}
+                                                <div class="d-flex flex-column gap-2 align-items-end">
+                                                    <!-- Approve Button -->
+                                                    <form action="{{ url_for('approve_booking', booking_id=b.id) }}" method="POST" onsubmit="return confirm('Approve this reservation request for {{ b.user.name }}?');">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-success btn-xs" id="approve-booking-{{ b.id }}" {% if conflict %}title="Warning: Conflict detected. Overlap check will reject approval."{% endif %}>
+                                                            ✓ Approve
+                                                        </button>
+                                                    </form>
+
+                                                    <!-- Reject Button & Modal/Inline Toggle -->
+                                                    <button type="button" class="btn btn-outline-danger btn-xs" onclick="document.getElementById('reject-form-{{ b.id }}').style.display = (document.getElementById('reject-form-{{ b.id }}').style.display === 'none' ? 'block' : 'none');">
+                                                        ✕ Reject...
+                                                    </button>
+                                                </div>
+
+                                                <!-- Inline Reject Reason Form -->
+                                                <div id="reject-form-{{ b.id }}" class="mt-2 text-left bg-light p-2 rounded border" style="display: none; min-width: 220px;">
+                                                    <form action="{{ url_for('reject_booking', booking_id=b.id) }}" method="POST">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <label class="text-xs font-weight-bold mb-1 d-block">Rejection Reason:</label>
+                                                        <textarea name="rejection_reason" class="form-control text-xs mb-2" rows="2" required placeholder="State prerequisite deficit, maintenance, or conflict reasons..."></textarea>
+                                                        <div class="d-flex justify-content-end gap-1">
+                                                            <button type="button" class="btn btn-ghost btn-xs" onclick="document.getElementById('reject-form-{{ b.id }}').style.display = 'none';">Cancel</button>
+                                                            <button type="submit" class="btn btn-danger btn-xs" id="confirm-reject-{{ b.id }}">Confirm Reject</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            {% else %}
+                                                <span class="text-xs text-muted">No pending actions</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <!-- Empty State -->
+            <div class="card text-center py-5 shadow-sm border-0">
+                <div class="card-body">
+                    <div class="empty-icon mb-3" style="font-size: 3rem;">📋</div>
+                    <h3>Queue is clear</h3>
+                    <p class="text-muted max-w-md mx-auto mb-4">
+                        {% if status_filter and status_filter != 'all' %}
+                            No reservations found matching status '{{ status_filter }}'.
+                        {% else %}
+                            There are currently no active booking requests awaiting manager decision for your managed resources.
+                        {% endif %}
+                    </p>
+                    <a href="{{ url_for('manage_resources') }}" class="btn btn-primary">
+                        View Managed Inventory
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

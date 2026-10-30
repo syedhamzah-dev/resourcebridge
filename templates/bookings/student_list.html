@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}My Bookings - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="page-container py-5">
+    <div class="container">
+        
+        <!-- Breadcrumb Navigation -->
+        <nav class="breadcrumb-nav mb-4" aria-label="breadcrumb">
+            <ol class="breadcrumb-list">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="separator">/</li>
+                <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="separator">/</li>
+                <li class="active" aria-current="page">My Bookings</li>
+            </ol>
+        </nav>
+
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="page-title mb-1">My Resource Reservations</h1>
+                <p class="text-muted mb-0">Track the review status, approval decisions, and schedule for your campus resource requests.</p>
+            </div>
+            <div>
+                <a href="{{ url_for('resources_list') }}" class="btn btn-primary btn-sm">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Request New Resource</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="filter-pills-bar mb-4">
+            <a href="{{ url_for('my_bookings') }}" class="filter-pill {% if not status_filter or status_filter == 'all' %}active{% endif %}">
+                All Requests ({{ bookings | length if (not status_filter or status_filter == 'all') else 'View All' }})
+            </a>
+            <a href="{{ url_for('my_bookings', status='pending') }}" class="filter-pill {% if status_filter == 'pending' %}active{% endif %}">
+                Pending Review
+            </a>
+            <a href="{{ url_for('my_bookings', status='approved') }}" class="filter-pill {% if status_filter == 'approved' %}active{% endif %}">
+                Approved
+            </a>
+            <a href="{{ url_for('my_bookings', status='rejected') }}" class="filter-pill {% if status_filter == 'rejected' %}active{% endif %}">
+                Rejected
+            </a>
+            <a href="{{ url_for('my_bookings', status='cancelled') }}" class="filter-pill {% if status_filter == 'cancelled' %}active{% endif %}">
+                Cancelled
+            </a>
+        </div>
+
+        <!-- Bookings Content -->
+        {% if bookings %}
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="data-table" id="student-bookings-table">
+                            <thead>
+                                <tr>
+                                    <th>Booking Ref</th>
+                                    <th>Resource</th>
+                                    <th>Reserved Window</th>
+                                    <th>Purpose</th>
+                                    <th>Status</th>
+                                    <th>Review Details</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for b in bookings %}
+                                    <tr id="booking-row-{{ b.id }}">
+                                        <td>
+                                            <span class="badge badge-default">#BK-{{ "%04d" | format(b.id) }}</span>
+                                            <div class="text-xs text-muted mt-1">{{ b.created_at.strftime('%b %d, %H:%M') }}</div>
+                                        </td>
+                                        <td>
+                                            <strong>
+                                                <a href="{{ url_for('resource_detail', resource_id=b.resource.id) }}">
+                                                    {{ b.resource.name }}
+                                                </a>
+                                            </strong>
+                                            <div class="text-xs text-muted">
+                                                📍 {{ b.resource.location }} &bull; {{ b.resource.category }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="booking-time-block">
+                                                <strong>{{ b.start_time.strftime('%a, %b %d, %Y') }}</strong>
+                                                <div class="text-sm text-muted">
+                                                    {{ b.start_time.strftime('%H:%M') }} &rarr; {{ b.end_time.strftime('%H:%M') }}
+                                                    <span class="badge badge-light ml-1">{{ b.duration_hours }}h</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="text-sm" title="{{ b.purpose }}">
+                                                {{ b.purpose[:80] }}{% if b.purpose | length > 80 %}...{% endif %}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge {{ b.status_badge_class }}">
+                                                {{ b.status_title }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if b.is_approved %}
+                                                <div class="text-xs text-emerald">
+                                                    ✓ Approved by {{ b.decision_maker.name if b.decision_maker else 'Department Lead' }}
+                                                </div>
+                                                {% if b.decided_at %}
+                                                    <div class="text-xs text-muted">{{ b.decided_at.strftime('%b %d, %H:%M') }}</div>
+                                                {% endif %}
+                                            {% elif b.is_rejected %}
+                                                <div class="text-xs text-danger-custom">
+                                                    ✕ Reason: {{ b.rejection_reason or 'Capacity constraint or prerequisite not met.' }}
+                                                </div>
+                                                {% if b.decided_at %}
+                                                    <div class="text-xs text-muted">Decided: {{ b.decided_at.strftime('%b %d, %H:%M') }}</div>
+                                                {% endif %}
+                                            {% elif b.is_pending %}
+                                                <div class="text-xs text-muted">
+                                                    ⏳ Under review by {{ b.resource.owner.name }}
+                                                </div>
+                                                {% if b.resource.training_required %}
+                                                    <div class="text-xs text-warning mt-1">⚠️ Prereq: {{ b.resource.training_details }}</div>
+                                                {% endif %}
+                                            {% elif b.is_cancelled %}
+                                                <div class="text-xs text-muted">Request withdrawn</div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-right">
+                                            {% if b.is_pending %}
+                                                <form action="{{ url_for('cancel_booking', booking_id=b.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Cancel this pending reservation request?');">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-outline-danger btn-xs" id="cancel-booking-{{ b.id }}">
+                                                        Cancel Request
+                                                    </button>
+                                                </form>
+                                            {% else %}
+                                                <a href="{{ url_for('resource_detail', resource_id=b.resource.id) }}" class="btn btn-outline btn-xs">
+                                                    View Resource
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <!-- Empty State -->
+            <div class="card text-center py-5 shadow-sm border-0">
+                <div class="card-body">
+                    <div class="empty-icon mb-3" style="font-size: 3rem;">📅</div>
+                    <h3>No reservation requests found</h3>
+                    <p class="text-muted max-w-md mx-auto mb-4">
+                        {% if status_filter and status_filter != 'all' %}
+                            You do not currently have any bookings in '{{ status_filter }}' status.
+                        {% else %}
+                            You haven't submitted any campus equipment or room booking requests yet. Discover laboratories, cameras, high-performance computing nodes, and seminar spaces in the catalogue.
+                        {% endif %}
+                    </p>
+                    <a href="{{ url_for('resources_list') }}" class="btn btn-primary">
+                        Browse Resource Catalogue
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

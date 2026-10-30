@@ -9,6 +9,7 @@ database initialization, and seeding of demo accounts & resources.
 
 import os
 import secrets
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import (
     Flask,
@@ -31,9 +32,12 @@ from models import (
     db,
     User,
     Resource,
+    Booking,
     VALID_CATEGORIES,
     VALID_RESOURCE_TYPES,
-    VALID_STATUSES
+    VALID_STATUSES,
+    VALID_BOOKING_STATUSES,
+    check_booking_conflict
 )
 
 # Load environment variables if python-dotenv is present
@@ -111,11 +115,26 @@ def create_app(test_config=None):
     @app.context_processor
     def inject_helpers():
         """Inject global helpers and constants into all Jinja2 templates."""
+        pending_count = 0
+        if current_user.is_authenticated and current_user.can_manage_resources:
+            try:
+                if current_user.is_admin:
+                    pending_count = Booking.query.filter_by(status='pending').count()
+                else:
+                    pending_count = Booking.query.join(Resource).filter(
+                        Resource.owner_id == current_user.id,
+                        Booking.status == 'pending'
+                    ).count()
+            except Exception:
+                pending_count = 0
+
         return {
             'csrf_token': generate_csrf_token,
             'VALID_CATEGORIES': VALID_CATEGORIES,
             'VALID_RESOURCE_TYPES': VALID_RESOURCE_TYPES,
-            'VALID_STATUSES': VALID_STATUSES
+            'VALID_STATUSES': VALID_STATUSES,
+            'VALID_BOOKING_STATUSES': VALID_BOOKING_STATUSES,
+            'pending_reviews_count': pending_count
         }
 
     @app.before_request
@@ -563,6 +582,321 @@ def create_app(test_config=None):
         return render_template('resources/manage.html', resources=resources, title=title)
 
     # --------------------------------------------------------------------------
+    # Booking & Approval Workflows
+    # --------------------------------------------------------------------------
+
+    @app.route('/resources/<int:resource_id>/book', methods=['POST'])
+    @login_required
+    def book_resource(resource_id):
+        """
+        Student Booking Request Submission.
+        Validates resource operational status, start & end times, positive duration,
+        future time requirements, non-empty purpose, and conflict against approved bookings.
+        """
+        resource = db.session.get(Resource, resource_id)
+        if not resource:
+            flash(f"Resource #{resource_id} not found.", "danger")
+            abort(404)
+
+        # Operational status guard: maintenance or inactive cannot be reserved
+        if resource.status != 'active':
+            flash(
+                f"Booking unavailable: '{resource.name}' is currently {resource.status_title.lower()} "
+                f"and not accepting reservation requests.",
+                "danger"
+            )
+            return render_template('resources/detail.html', resource=resource), 400
+
+        start_str = request.form.get('start_time', '').strip()
+        end_str = request.form.get('end_time', '').strip()
+        purpose = request.form.get('purpose', '').strip()
+
+        errors = []
+        if not start_str:
+            errors.append("Start date and time are required.")
+        if not end_str:
+            errors.append("End date and time are required.")
+        if not purpose or len(purpose) < 5:
+            errors.append("A specific booking purpose of at least 5 characters is required.")
+
+        start_time = None
+        end_time = None
+
+        if start_str and end_str:
+            try:
+                start_time = datetime.fromisoformat(start_str)
+                end_time = datetime.fromisoformat(end_str)
+                # Ensure naive UTC datetimes for consistent database comparison
+                if start_time.tzinfo is not None:
+                    start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
+                if end_time.tzinfo is not None:
+                    end_time = end_time.astimezone(timezone.utc).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                errors.append("Invalid date format. Please use the date and time picker.")
+
+        if start_time and end_time:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            # Allow 5-minute clock drift tolerance
+            if start_time < (now - timedelta(minutes=5)):
+                errors.append("Booking start time cannot be in the past.")
+            if end_time <= start_time:
+                errors.append("Booking end time must be after the start time.")
+            elif (end_time - start_time) > timedelta(days=14):
+                errors.append("Maximum reservation period cannot exceed 14 consecutive days.")
+
+        # Check against existing approved bookings for this resource
+        if not errors and start_time and end_time:
+            conflict = check_booking_conflict(resource.id, start_time, end_time)
+            if conflict:
+                errors.append(
+                    f"Scheduling conflict: This resource is already reserved and approved from "
+                    f"{conflict.start_time.strftime('%Y-%m-%d %H:%M')} to {conflict.end_time.strftime('%Y-%m-%d %H:%M')}."
+                )
+
+        if errors:
+            for error in errors:
+                flash(error, "danger")
+            return render_template('resources/detail.html', resource=resource), 400
+
+        try:
+            booking = Booking(
+                resource_id=resource.id,
+                user_id=current_user.id,
+                start_time=start_time,
+                end_time=end_time,
+                purpose=purpose,
+                status='pending'
+            )
+            db.session.add(booking)
+            db.session.commit()
+
+            msg = (
+                f"Booking request for '{resource.name}' has been submitted successfully! "
+                f"Your request is queued for department manager review."
+            )
+            if resource.training_required:
+                msg += f" Note: Required safety prerequisite '{resource.training_details}' must be verified prior to approval."
+
+            flash(msg, "success")
+            return redirect(url_for('my_bookings'))
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while saving your booking request.", "danger")
+            return redirect(url_for('resource_detail', resource_id=resource.id)), 500
+
+    @app.route('/bookings')
+    @login_required
+    def my_bookings():
+        """
+        Student / User Bookings Portal.
+        Displays personal booking history, review status badges, manager decision notes,
+        and cancellation controls for pending reservations.
+        """
+        status_filter = request.args.get('status', 'all').strip()
+        query = Booking.query.filter_by(user_id=current_user.id)
+        if status_filter in VALID_BOOKING_STATUSES:
+            query = query.filter_by(status=status_filter)
+
+        bookings = query.order_by(Booking.created_at.desc()).all()
+        return render_template('bookings/student_list.html', bookings=bookings, status_filter=status_filter)
+
+    @app.route('/bookings/<int:booking_id>/cancel', methods=['POST'])
+    @login_required
+    def cancel_booking(booking_id):
+        """
+        Booking Cancellation.
+        Only the original requester or an administrator can cancel a pending booking.
+        Approved or already processed bookings cannot be arbitrarily cancelled.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if booking.user_id != current_user.id and not current_user.is_admin:
+            flash("Access denied: You can only cancel your own booking requests.", "danger")
+            return redirect(url_for('my_bookings')), 403
+
+        if booking.status != 'pending':
+            flash(
+                f"Cannot cancel booking #{booking.id}: Only pending requests can be cancelled. "
+                f"Current status is '{booking.status_title}'.",
+                "warning"
+            )
+            bookings = Booking.query.filter_by(user_id=current_user.id).order_by(Booking.created_at.desc()).all()
+            return render_template('bookings/student_list.html', bookings=bookings, status_filter='all'), 400
+
+        try:
+            booking.status = 'cancelled'
+            db.session.commit()
+            flash(f"Booking request #{booking.id} for '{booking.resource.name}' has been cancelled.", "info")
+        except Exception:
+            db.session.rollback()
+            flash("An error occurred while cancelling your booking request.", "danger")
+
+        return redirect(url_for('my_bookings'))
+
+    @app.route('/manager/bookings')
+    @login_required
+    def manager_bookings():
+        """
+        Manager & Admin Approval Queue.
+        Department managers see requests for resources they own;
+        Campus administrators see requests across all college departments.
+        Calculates conflict alerts dynamically for pending requests.
+        """
+        if not current_user.can_manage_resources:
+            flash("Access denied: Only managers and administrators can access the review queue.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        status_filter = request.args.get('status', 'all').strip()
+
+        if current_user.is_admin:
+            query = Booking.query
+        else:
+            query = Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
+
+        if status_filter in VALID_BOOKING_STATUSES:
+            query = query.filter(Booking.status == status_filter)
+
+        bookings = query.order_by(
+            db.case((Booking.status == 'pending', 0), else_=1),
+            Booking.start_time.asc()
+        ).all()
+
+        conflicts_map = {}
+        for b in bookings:
+            if b.status == 'pending':
+                conflicts_map[b.id] = check_booking_conflict(b.resource_id, b.start_time, b.end_time)
+
+        return render_template(
+            'bookings/manager_list.html',
+            bookings=bookings,
+            conflicts_map=conflicts_map,
+            status_filter=status_filter
+        )
+
+    @app.route('/bookings/<int:booking_id>/approve', methods=['POST'])
+    @login_required
+    def approve_booking(booking_id):
+        """
+        Manager / Admin Approval Action.
+        Enforces:
+        1. Authorization: Only resource owner manager or admin can approve.
+        2. Status: Only pending bookings can be approved.
+        3. Operational status: Cannot approve if resource is in maintenance/inactive.
+        4. Strict Conflict Detection: Cannot approve if another approved booking overlaps.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if not booking.can_be_managed_by(current_user):
+            flash("Access denied: You are not authorized to approve bookings for this resource.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        if booking.status != 'pending':
+            flash(f"Booking #{booking.id} is already in '{booking.status_title}' status.", "warning")
+            return redirect(url_for('manager_bookings'))
+
+        if booking.resource.status != 'active':
+            flash(
+                f"Cannot approve: Resource '{booking.resource.name}' is currently {booking.resource.status_title.lower()}.",
+                "danger"
+            )
+            return redirect(url_for('manager_bookings')), 400
+
+        conflict = check_booking_conflict(
+            booking.resource_id,
+            booking.start_time,
+            booking.end_time,
+            exclude_booking_id=booking.id
+        )
+        if conflict:
+            flash(
+                f"Approval Blocked by Conflict: Resource '{booking.resource.name}' is already reserved "
+                f"for approved Booking #{conflict.id} ({conflict.user.name}) from "
+                f"{conflict.start_time.strftime('%Y-%m-%d %H:%M')} to {conflict.end_time.strftime('%Y-%m-%d %H:%M')}. "
+                f"Conflicting approved reservations are strictly prohibited.",
+                "danger"
+            )
+            query = Booking.query if current_user.is_admin else Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
+            bookings = query.order_by(db.case((Booking.status == 'pending', 0), else_=1), Booking.start_time.asc()).all()
+            conflicts_map = {b.id: check_booking_conflict(b.resource_id, b.start_time, b.end_time) for b in bookings if b.status == 'pending'}
+            return render_template(
+                'bookings/manager_list.html',
+                bookings=bookings,
+                conflicts_map=conflicts_map,
+                status_filter='all'
+            ), 409
+
+        try:
+            booking.status = 'approved'
+            booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            booking.decided_by_id = current_user.id
+            booking.rejection_reason = None
+            db.session.commit()
+            flash(
+                f"Booking #{booking.id} for '{booking.resource.name}' requested by {booking.user.name} has been approved!",
+                "success"
+            )
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while approving the booking.", "danger")
+
+        return redirect(url_for('manager_bookings'))
+
+    @app.route('/bookings/<int:booking_id>/reject', methods=['POST'])
+    @login_required
+    def reject_booking(booking_id):
+        """
+        Manager / Admin Rejection Action.
+        Requires a non-empty rejection reason to provide transparency to the student.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if not booking.can_be_managed_by(current_user):
+            flash("Access denied: You are not authorized to reject bookings for this resource.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        if booking.status != 'pending':
+            flash(f"Booking #{booking.id} is already in '{booking.status_title}' status.", "warning")
+            return redirect(url_for('manager_bookings'))
+
+        reason = request.form.get('rejection_reason', '').strip()
+        if not reason:
+            flash("A rejection reason is required so the student understands the decision.", "danger")
+            query = Booking.query if current_user.is_admin else Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
+            bookings = query.order_by(db.case((Booking.status == 'pending', 0), else_=1), Booking.start_time.asc()).all()
+            conflicts_map = {b.id: check_booking_conflict(b.resource_id, b.start_time, b.end_time) for b in bookings if b.status == 'pending'}
+            return render_template(
+                'bookings/manager_list.html',
+                bookings=bookings,
+                conflicts_map=conflicts_map,
+                status_filter='all'
+            ), 400
+
+        try:
+            booking.status = 'rejected'
+            booking.rejection_reason = reason
+            booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            booking.decided_by_id = current_user.id
+            db.session.commit()
+            flash(
+                f"Booking #{booking.id} has been rejected. The explanation has been recorded for the student.",
+                "info"
+            )
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while rejecting the booking.", "danger")
+
+        return redirect(url_for('manager_bookings'))
+
+    # --------------------------------------------------------------------------
     # Role-Aware Dashboard & Protected Routes
     # --------------------------------------------------------------------------
 
@@ -572,9 +906,9 @@ def create_app(test_config=None):
         """
         Main application dashboard.
         Uses real database queries for operational statistics:
-        - student: actual count of active resources & catalog sample
-        - manager: count of resources managed by current user, maintenance alerts, recent items
-        - admin: total users, total resources, active vs maintenance breakdown
+        - student: active resources, categories, my bookings & pending requests
+        - manager: resources managed, maintenance alerts, pending reviews, active reservations
+        - admin: total users, resources, active vs maintenance, total bookings & reviews
         """
         db_stats = {}
 
@@ -582,12 +916,26 @@ def create_app(test_config=None):
             db_stats['total_active_resources'] = Resource.query.filter_by(status='active').count()
             db_stats['total_categories'] = db.session.query(Resource.category).distinct().count()
             db_stats['recent_resources'] = Resource.query.filter_by(status='active').order_by(Resource.id.desc()).limit(3).all()
+            db_stats['my_active_bookings'] = Booking.query.filter_by(user_id=current_user.id, status='approved').count()
+            db_stats['my_pending_bookings'] = Booking.query.filter_by(user_id=current_user.id, status='pending').count()
+            db_stats['my_recent_bookings'] = Booking.query.filter_by(user_id=current_user.id).order_by(Booking.created_at.desc()).limit(4).all()
 
         elif current_user.is_manager:
             db_stats['my_total_resources'] = Resource.query.filter_by(owner_id=current_user.id).count()
             db_stats['my_active_resources'] = Resource.query.filter_by(owner_id=current_user.id, status='active').count()
             db_stats['my_maintenance_resources'] = Resource.query.filter_by(owner_id=current_user.id, status='maintenance').count()
             db_stats['my_recent_resources'] = Resource.query.filter_by(owner_id=current_user.id).order_by(Resource.id.desc()).limit(4).all()
+            db_stats['pending_reviews_count'] = Booking.query.join(Resource).filter(
+                Resource.owner_id == current_user.id,
+                Booking.status == 'pending'
+            ).count()
+            db_stats['active_reservations_count'] = Booking.query.join(Resource).filter(
+                Resource.owner_id == current_user.id,
+                Booking.status == 'approved'
+            ).count()
+            db_stats['recent_booking_requests'] = Booking.query.join(Resource).filter(
+                Resource.owner_id == current_user.id
+            ).order_by(Booking.created_at.desc()).limit(5).all()
 
         elif current_user.is_admin:
             db_stats['total_users'] = User.query.count()
@@ -595,6 +943,10 @@ def create_app(test_config=None):
             db_stats['total_active_resources'] = Resource.query.filter_by(status='active').count()
             db_stats['total_maintenance_resources'] = Resource.query.filter_by(status='maintenance').count()
             db_stats['recent_resources'] = Resource.query.order_by(Resource.id.desc()).limit(5).all()
+            db_stats['total_bookings'] = Booking.query.count()
+            db_stats['pending_reviews_count'] = Booking.query.filter_by(status='pending').count()
+            db_stats['active_reservations_count'] = Booking.query.filter_by(status='approved').count()
+            db_stats['recent_booking_requests'] = Booking.query.order_by(Booking.created_at.desc()).limit(5).all()
 
         return render_template('dashboard.html', user=current_user, stats=db_stats)
 
@@ -620,10 +972,11 @@ def create_app(test_config=None):
 
     @app.cli.command('seed')
     def seed_command():
-        """Seed fictional demonstration accounts and campus resources for hackathon evaluation."""
+        """Seed fictional demonstration accounts, campus resources, and sample bookings."""
         user_count = seed_demo_users(app)
         resource_count = seed_demo_resources(app)
-        print(f"Seeded {user_count} demonstration accounts and {resource_count} resources.")
+        booking_count = seed_demo_bookings(app)
+        print(f"Seeded {user_count} accounts, {resource_count} resources, and {booking_count} sample bookings.")
 
     return app
 
@@ -830,6 +1183,88 @@ def seed_demo_resources(app):
     return count
 
 
+def seed_demo_bookings(app):
+    """
+    Populates database with initial demonstration booking requests
+    to showcase student reservation history and manager review queues.
+    """
+    with app.app_context():
+        db.create_all()
+        student = User.query.filter_by(email='student@campus.edu').first()
+        manager = User.query.filter_by(email='manager@campus.edu').first()
+        admin = User.query.filter_by(email='admin@campus.edu').first()
+
+        if not student or not manager or not admin:
+            seed_demo_users(app)
+            student = User.query.filter_by(email='student@campus.edu').first()
+            manager = User.query.filter_by(email='manager@campus.edu').first()
+            admin = User.query.filter_by(email='admin@campus.edu').first()
+
+        seminar_room = Resource.query.filter_by(name='Collaborative Innovation Seminar Suite 204').first()
+        microscope = Resource.query.filter_by(name='Photonics & Optical Microscopy Suite').first()
+        camera = Resource.query.filter_by(name='Sony FX3 Cinema Rig & Ronin Stabilizer Kit').first()
+
+        if not seminar_room or not microscope or not camera:
+            seed_demo_resources(app)
+            seminar_room = Resource.query.filter_by(name='Collaborative Innovation Seminar Suite 204').first()
+            microscope = Resource.query.filter_by(name='Photonics & Optical Microscopy Suite').first()
+            camera = Resource.query.filter_by(name='Sony FX3 Cinema Rig & Ronin Stabilizer Kit').first()
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        demo_bookings = [
+            {
+                'resource_id': seminar_room.id,
+                'user_id': student.id,
+                'start_time': now + timedelta(days=1, hours=2),
+                'end_time': now + timedelta(days=1, hours=5),
+                'purpose': 'ACM Student Chapter Hackathon Coordination and UI sprint planning.',
+                'status': 'approved',
+                'decided_by_id': admin.id,
+                'decided_at': now - timedelta(hours=3)
+            },
+            {
+                'resource_id': microscope.id,
+                'user_id': student.id,
+                'start_time': now + timedelta(days=2, hours=4),
+                'end_time': now + timedelta(days=2, hours=7),
+                'purpose': 'Characterization of thin-film photovoltaic prototypes under faculty mentor Dr. Vance.',
+                'status': 'pending'
+            },
+            {
+                'resource_id': camera.id,
+                'user_id': student.id,
+                'start_time': now + timedelta(days=3, hours=1),
+                'end_time': now + timedelta(days=3, hours=9),
+                'purpose': 'Documentary interview filming for university robotics showcase.',
+                'status': 'pending'
+            }
+        ]
+
+        count = 0
+        for data in demo_bookings:
+            existing = Booking.query.filter_by(
+                resource_id=data['resource_id'],
+                user_id=data['user_id'],
+                purpose=data['purpose']
+            ).first()
+            if not existing:
+                b = Booking(
+                    resource_id=data['resource_id'],
+                    user_id=data['user_id'],
+                    start_time=data['start_time'],
+                    end_time=data['end_time'],
+                    purpose=data['purpose'],
+                    status=data['status']
+                )
+                if 'decided_by_id' in data:
+                    b.decided_by_id = data['decided_by_id']
+                    b.decided_at = data.get('decided_at')
+                db.session.add(b)
+                count += 1
+        db.session.commit()
+    return count
+
+
 # Create standard application instance for direct running & WSGI servers
 app = create_app()
 
@@ -840,4 +1275,6 @@ if __name__ == '__main__':
             seed_demo_users(app)
         if Resource.query.count() == 0:
             seed_demo_resources(app)
+        if Booking.query.count() == 0:
+            seed_demo_bookings(app)
     app.run(debug=True, port=5000)

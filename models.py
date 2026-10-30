@@ -1,9 +1,10 @@
 """
 models.py - Database Models for ResourceBridge
 ==============================================
-Defines the User and Resource models and database schema using Flask-SQLAlchemy.
-Includes role-based access fields, secure password hashing with Werkzeug,
-and full resource inventory management with safety/training prerequisites.
+Defines the User, Resource, and Booking models using Flask-SQLAlchemy.
+Includes role-based access control, secure password hashing with Werkzeug,
+resource inventory management, and end-to-end booking/approval workflows
+with server-side conflict detection and safety prerequisite checks.
 """
 
 from datetime import datetime, timezone
@@ -30,6 +31,9 @@ VALID_CATEGORIES = (
 # Resource types and operational statuses
 VALID_RESOURCE_TYPES = ('equipment', 'space')
 VALID_STATUSES = ('active', 'inactive', 'maintenance')
+
+# Booking lifecycle statuses
+VALID_BOOKING_STATUSES = ('pending', 'approved', 'rejected', 'cancelled')
 
 
 class User(UserMixin, db.Model):
@@ -265,3 +269,159 @@ class Resource(db.Model):
 
     def __repr__(self):
         return f"<Resource id={self.id} name='{self.name}' status='{self.status}' owner_id={self.owner_id}>"
+
+
+class Booking(db.Model):
+    """
+    Booking Reservation Model
+    -------------------------
+    Represents a student booking request for a college resource.
+    Tracks requested time period, purpose, status lifecycle (pending, approved,
+    rejected, cancelled), manager decision timestamps, rejection reasons,
+    and timestamps for future check-in/return accountability.
+    """
+    __tablename__ = 'bookings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    resource_id = db.Column(db.Integer, db.ForeignKey('resources.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    start_time = db.Column(db.DateTime, nullable=False, index=True)
+    end_time = db.Column(db.DateTime, nullable=False, index=True)
+    purpose = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending', index=True)
+
+    # Decision audit fields
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
+    decided_at = db.Column(db.DateTime, nullable=True)
+    decided_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
+    # Future lifecycle checkpoints (physical hand-off & return reconciliation)
+    checked_out_at = db.Column(db.DateTime, nullable=True)
+    returned_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationships
+    resource = db.relationship(
+        'Resource',
+        backref=db.backref('bookings', lazy=True, cascade='all, delete-orphan')
+    )
+    user = db.relationship(
+        'User',
+        foreign_keys=[user_id],
+        backref=db.backref('bookings', lazy=True, cascade='all, delete-orphan')
+    )
+    decision_maker = db.relationship(
+        'User',
+        foreign_keys=[decided_by_id]
+    )
+
+    def __init__(
+        self,
+        resource_id,
+        user_id,
+        start_time,
+        end_time,
+        purpose,
+        status='pending'
+    ):
+        self.resource_id = resource_id
+        self.user_id = user_id
+        self.start_time = start_time
+        self.end_time = end_time
+        self.purpose = purpose.strip()
+        self.status = status if status in VALID_BOOKING_STATUSES else 'pending'
+
+    # Status helpers
+    @property
+    def is_pending(self):
+        return self.status == 'pending'
+
+    @property
+    def is_approved(self):
+        return self.status == 'approved'
+
+    @property
+    def is_rejected(self):
+        return self.status == 'rejected'
+
+    @property
+    def is_cancelled(self):
+        return self.status == 'cancelled'
+
+    @property
+    def status_title(self):
+        titles = {
+            'pending': 'Pending Review',
+            'approved': 'Approved',
+            'rejected': 'Rejected',
+            'cancelled': 'Cancelled'
+        }
+        return titles.get(self.status, self.status.title())
+
+    @property
+    def status_badge_class(self):
+        classes = {
+            'pending': 'badge-warning',
+            'approved': 'badge-success',
+            'rejected': 'badge-danger',
+            'cancelled': 'badge-default'
+        }
+        return classes.get(self.status, 'badge-default')
+
+    @property
+    def duration_hours(self):
+        """Calculates duration in decimal hours."""
+        if self.start_time and self.end_time:
+            delta = self.end_time - self.start_time
+            return round(delta.total_seconds() / 3600.0, 1)
+        return 0.0
+
+    def can_be_managed_by(self, user):
+        """
+        Check if user is authorized to approve or reject this booking:
+        - Admin can manage all bookings.
+        - Manager can manage bookings for resources they own.
+        - Requester/student cannot approve or reject.
+        """
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_admin:
+            return True
+        if user.is_manager and self.resource and self.resource.owner_id == user.id:
+            return True
+        return False
+
+    def __repr__(self):
+        return f"<Booking id={self.id} resource_id={self.resource_id} user_id={self.user_id} status='{self.status}'>"
+
+
+def check_booking_conflict(resource_id, start_time, end_time, exclude_booking_id=None):
+    """
+    Server-Side Conflict Detection Algorithm:
+    Checks if an 'approved' booking already exists for the specified resource
+    that overlaps with the candidate [start_time, end_time] interval.
+
+    Standard Overlap Condition:
+        (approved.start_time < candidate.end_time) AND (approved.end_time > candidate.start_time)
+
+    Returns the conflicting approved Booking instance if found, or None if the slot is clear.
+    """
+    query = Booking.query.filter(
+        Booking.resource_id == resource_id,
+        Booking.status == 'approved',
+        Booking.start_time < end_time,
+        Booking.end_time > start_time
+    )
+    if exclude_booking_id:
+        query = query.filter(Booking.id != exclude_booking_id)
+    return query.first()

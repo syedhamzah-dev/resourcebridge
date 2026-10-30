@@ -81,10 +81,10 @@
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                     </div>
                     <div class="metric-content">
-                        <span class="metric-value">0</span>
+                        <span class="metric-value">{{ stats.get('my_active_bookings', 0) }}</span>
                         <span class="metric-label">Active Loans</span>
                     </div>
-                    <span class="metric-hint">Stage 3 Booking Milestone</span>
+                    <span class="metric-hint text-emerald">Approved Reservations</span>
                 </div>
 
                 <div class="metric-card">
@@ -92,10 +92,10 @@
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                     </div>
                     <div class="metric-content">
-                        <span class="metric-value">{{ stats.get('total_categories', 0) }}</span>
-                        <span class="metric-label">Disciplines</span>
+                        <span class="metric-value">{{ stats.get('my_pending_bookings', 0) }}</span>
+                        <span class="metric-label">Pending Requests</span>
                     </div>
-                    <span class="metric-hint">Active resource categories</span>
+                    <span class="metric-hint">Awaiting Review</span>
                 </div>
 
                 <div class="metric-card">
@@ -162,33 +162,54 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Student Accountability Code</h3>
+                        <h3 class="card-title">My Recent Reservations</h3>
+                        <a href="{{ url_for('my_bookings') }}" class="btn btn-outline btn-sm">
+                            View All &rarr;
+                        </a>
                     </div>
                     <div class="card-body">
-                        <div class="pledge-box">
-                            <div class="pledge-item">
-                                <span class="check-icon">✓</span>
-                                <div>
-                                    <strong>Inspection on Pickup:</strong> Always report pre-existing blemishes to the lab manager before leaving.
-                                </div>
+                        {% if stats.get('my_recent_bookings') %}
+                            <div class="table-responsive">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Resource</th>
+                                            <th>Schedule</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for b in stats.get('my_recent_bookings') %}
+                                            <tr>
+                                                <td>
+                                                    <strong>{{ b.resource.name }}</strong>
+                                                    <div class="text-xs text-muted">#BK-{{ "%04d" | format(b.id) }}</div>
+                                                </td>
+                                                <td>
+                                                    <span class="text-xs">{{ b.start_time.strftime('%b %d, %H:%M') }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge {{ b.status_badge_class }} text-xs">
+                                                        {{ b.status_title }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="pledge-item">
-                                <span class="check-icon">✓</span>
-                                <div>
-                                    <strong>Strict Return Windows:</strong> Returning equipment late delays fellow student projects and reduces your trust rating.
-                                </div>
-                            </div>
-                            <div class="pledge-item">
-                                <span class="check-icon">✓</span>
-                                <div>
-                                    <strong>Safety Prerequisite:</strong> High-voltage equipment, lasers, and chemical hoods require certified training.
-                                </div>
-                            </div>
-                        </div>
+                        {% else %}
+                            <p class="text-muted text-sm">You haven't requested any campus resources yet.</p>
+                            <a href="{{ url_for('resources_list') }}" class="btn btn-primary btn-sm btn-block mt-2">
+                                Browse Catalogue &amp; Reserve
+                            </a>
+                        {% endif %}
 
-                        <div class="mt-4 p-3 bg-light rounded text-sm">
-                            <strong>Looking for equipment?</strong>
-                            <p class="text-muted mt-1">Use the full <a href="{{ url_for('resources_list') }}">Resource Catalogue</a> with multi-filtering by category, location, and safety prerequisites.</p>
+                        <div class="accountability-reminder mt-4">
+                            <div class="reminder-icon">🛡️</div>
+                            <div class="reminder-text">
+                                <strong>Fair Use Code:</strong> Always check return windows. Cancellations can be submitted while requests remain pending.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -238,10 +259,12 @@
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
                     </div>
                     <div class="metric-content">
-                        <span class="metric-value">Stage 3</span>
-                        <span class="metric-label">Approval Queue</span>
+                        <span class="metric-value">{{ stats.get('pending_reviews_count', 0) }}</span>
+                        <span class="metric-label">Pending Reviews</span>
                     </div>
-                    <span class="metric-hint">Booking requests coming next</span>
+                    <span class="metric-hint {% if stats.get('pending_reviews_count', 0) > 0 %}text-warning{% endif %}">
+                        {{ stats.get('active_reservations_count', 0) }} Active Approved
+                    </span>
                 </div>
             </div>
 
@@ -297,6 +320,13 @@
                     </div>
                     <div class="card-body">
                         <div class="quick-action-list">
+                            <a href="{{ url_for('manager_bookings') }}" class="quick-action-item">
+                                <div class="action-icon">📋</div>
+                                <div>
+                                    <strong>Review Booking Queue ({{ stats.get('pending_reviews_count', 0) }} pending)</strong>
+                                    <p class="text-sm text-muted">Review student reservations, check training prerequisites, and approve access.</p>
+                                </div>
+                            </a>
                             <a href="{{ url_for('new_resource') }}" class="quick-action-item">
                                 <div class="action-icon">➕</div>
                                 <div>

@@ -45,8 +45,17 @@
 
                     {% if current_user.is_authenticated %}
                         <li><a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a></li>
+                        <li><a href="{{ url_for('my_bookings') }}" class="nav-link {% if request.endpoint == 'my_bookings' %}active{% endif %}">My Bookings</a></li>
                         {% if current_user.can_manage_resources %}
-                            <li><a href="{{ url_for('manage_resources') }}" class="nav-link {% if request.endpoint == 'manage_resources' %}active{% endif %}">Manage Inventory</a></li>
+                            <li>
+                                <a href="{{ url_for('manager_bookings') }}" class="nav-link {% if request.endpoint == 'manager_bookings' %}active{% endif %}">
+                                    Review Bookings
+                                    {% if pending_reviews_count and pending_reviews_count > 0 %}
+                                        <span class="badge badge-warning text-xs ml-1" id="nav-pending-badge">{{ pending_reviews_count }}</span>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            <li><a href="{{ url_for('manage_resources') }}" class="nav-link {% if request.endpoint in ('manage_resources', 'new_resource', 'edit_resource') %}active{% endif %}">Manage Inventory</a></li>
                         {% endif %}
                     {% endif %}
                 </ul>
