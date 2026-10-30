@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}About & Platform Architecture - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="container py-6">
+    <div class="page-header text-center">
+        <span class="section-tag">Hackathon Blueprint</span>
+        <h1 class="page-title">Trust, Safety & Fair Access</h1>
+        <p class="page-subtitle">
+            How ResourceBridge bridges the gap between idle college assets and ambitious student builders.
+        </p>
+    </div>
+
+    <div class="content-grid">
+        <div class="card info-card">
+            <div class="card-header">
+                <span class="card-icon">🎯</span>
+                <h3 class="card-title">The Challenge in Higher Education</h3>
+            </div>
+            <div class="card-body">
+                <p>
+                    College departments invest heavily in specialized resources: electron microscopes, cinematic camera packages, high-end GPU workstations, audio booths, and laser cutters.
+                </p>
+                <p>
+                    However, these assets are often locked in departmental silos. After 4:00 PM, an estimated <strong>65% to 80%</strong> of specialized college facilities sit dark and unutilized, while students working on capstones or startup prototypes lack access.
+                </p>
+            </div>
+        </div>
+
+        <div class="card info-card">
+            <div class="card-header">
+                <span class="card-icon">🛡️</span>
+                <h3 class="card-title">The Four Pillars of Trust</h3>
+            </div>
+            <div class="card-body">
+                <ul class="pillar-bullet-list">
+                    <li>
+                        <strong>1. Verified Campus Membership:</strong> Every participant has an authenticated identity tied to an active institutional status.
+                    </li>
+                    <li>
+                        <strong>2. Controlled Role Permissions:</strong> Strict segregation of duties. Students request, Managers inspect and approve, Admins set governance rules.
+                    </li>
+                    <li>
+                        <strong>3. Check-out / Check-in Accountability:</strong> Clear audit trails recording who took what, when, and the logged condition upon return.
+                    </li>
+                    <li>
+                        <strong>4. Anti-Hoarding Rules:</strong> Fair access time caps and active reservation limits prevent any one group from monopolizing shared gear.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card info-card">
+            <div class="card-header">
+                <span class="card-icon">⚡</span>
+                <h3 class="card-title">Architecture & Tech Stack</h3>
+            </div>
+            <div class="card-body">
+                <p>
+                    Built with clean, maintainable, dependency-conscious Python technology:
+                </p>
+                <div class="tech-stack-list">
+                    <div class="tech-item">
+                        <strong>Backend:</strong> Python 3 + Flask Application Factory
+                    </div>
+                    <div class="tech-item">
+                        <strong>Database:</strong> SQLite with Flask-SQLAlchemy ORM
+                    </div>
+                    <div class="tech-item">
+                        <strong>Session & Auth:</strong> Flask-Login + Werkzeug Password Hashing
+                    </div>
+                    <div class="tech-item">
+                        <strong>Frontend:</strong> Jinja2 HTML5 Templates, Vanilla CSS & Vanilla JS
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card info-card">
+            <div class="card-header">
+                <span class="card-icon">🚀</span>
+                <h3 class="card-title">24-Hour Hackathon Roadmap</h3>
+            </div>
+            <div class="card-body">
+                <div class="roadmap-steps">
+                    <div class="roadmap-step completed">
+                        <span class="step-num">✓</span>
+                        <div class="step-info">
+                            <strong>Stage 1: Core Foundation (Current)</strong>
+                            <span>User model, Werkzeug hashing, Flask-Login, role-aware dashboard, demo seeding.</span>
+                        </div>
+                    </div>
+                    <div class="roadmap-step">
+                        <span class="step-num">2</span>
+                        <div class="step-info">
+                            <strong>Stage 2: Resource Inventory & Catalog</strong>
+                            <span>Resource listings, lab categorisation, availability schedule, asset attributes.</span>
+                        </div>
+                    </div>
+                    <div class="roadmap-step">
+                        <span class="step-num">3</span>
+                        <div class="step-info">
+                            <strong>Stage 3: Reservation & Accountability Lifecycle</strong>
+                            <span>Student requests, manager approval queue, condition logging, return hand-off.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mt-6">
+        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Explore with Demo Credentials</a>
+    </div>
+</div>
+{% endblock %}

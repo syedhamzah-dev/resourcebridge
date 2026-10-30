@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Resource Not Found (404) - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="container py-6 text-center">
+    <div class="empty-state-card">
+        <div class="empty-icon">🔍</div>
+        <h1 class="page-title mt-2">Resource Not Found</h1>
+        <p class="text-muted max-w-500 mx-auto mt-2">
+            The resource ID or page you requested could not be found in the ResourceBridge catalog. It may have been relocated, archived, or entered incorrectly.
+        </p>
+        <div class="mt-4">
+            <a href="{{ url_for('resources_list') }}" class="btn btn-primary" id="btn-404-catalogue">
+                Browse Campus Catalogue
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline ml-2">
+                Return Home
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

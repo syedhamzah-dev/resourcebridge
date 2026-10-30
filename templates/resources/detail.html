@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource.name }} - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    
+    <!-- Breadcrumb & Top Navigation Bar -->
+    <div class="detail-nav-row">
+        <div class="breadcrumb-trail">
+            <a href="{{ url_for('index') }}">Home</a>
+            <span class="breadcrumb-separator">/</span>
+            <a href="{{ url_for('resources_list') }}">Resource Catalogue</a>
+            <span class="breadcrumb-separator">/</span>
+            <span>{{ resource.name }}</span>
+        </div>
+
+        <div class="detail-top-actions">
+            <a href="{{ url_for('resources_list') }}" class="btn btn-outline btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                <span>Back to Catalogue</span>
+            </a>
+
+            {% if current_user.is_authenticated and resource.can_be_managed_by(current_user) %}
+                <a href="{{ url_for('edit_resource', resource_id=resource.id) }}" class="btn btn-primary btn-sm" id="btn-edit-resource">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    <span>Edit Resource Details</span>
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Resource Hero Header Card -->
+    <div class="resource-detail-hero">
+        <div class="detail-hero-meta">
+            <span class="badge {{ resource.type_badge_class }}">
+                {% if resource.is_space %}
+                    Space / Facility
+                {% else %}
+                    Physical Equipment
+                {% endif %}
+            </span>
+            <span class="resource-detail-category">{{ resource.category }}</span>
+            <span class="badge {{ resource.status_badge_class }}">{{ resource.status_title }}</span>
+            {% if resource.is_verified %}
+                <span class="badge badge-verified">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Department Verified
+                </span>
+            {% endif %}
+        </div>
+
+        <h1 class="resource-detail-title">{{ resource.name }}</h1>
+
+        <div class="detail-quick-specs">
+            <div class="spec-chip">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <span><strong>Location:</strong> {{ resource.location }}</span>
+            </div>
+            <div class="spec-chip">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span><strong>Access Hours:</strong> {{ resource.availability_info }}</span>
+            </div>
+            <div class="spec-chip">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span><strong>Custodian:</strong> {{ resource.owner.name }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Booking Milestone Advisory Notice -->
+    <div class="booking-stage-notice">
+        <div class="notice-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <div class="notice-body">
+            <strong>Stage 2 Discovery Preview:</strong> This resource profile represents verified database inventory. 
+            Real-time calendar scheduling, conflict detection, and online reservation requests will be introduced in <strong>Stage 3</strong>.
+        </div>
+    </div>
+
+    <!-- Main Detail Grid -->
+    <div class="detail-content-grid">
+        
+        <!-- Left Column: Description, Rules, and Overview -->
+        <div class="detail-main-col">
+            <!-- Full Description Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Resource Specification & Description</h2>
+                </div>
+                <div class="card-body">
+                    <p class="detail-description-text">
+                        {{ resource.description }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Operating Rules & Usage Guidelines -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Usage Guidelines & Checkout Rules</h2>
+                </div>
+                <div class="card-body">
+                    {% if resource.usage_rules %}
+                        <div class="rules-box">
+                            <p>{{ resource.usage_rules }}</p>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Standard campus lab fair-use and equipment handling policies apply.</p>
+                    {% endif %}
+
+                    <div class="accountability-reminder mt-4">
+                        <div class="reminder-icon">🛡️</div>
+                        <div class="reminder-text">
+                            <strong>Accountability Protocol:</strong> Borrowers must perform a physical inspection with the lab manager during pickup. Any unrecorded physical damage or late return will directly affect the student's campus trust rating.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ownership & Transparency Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Data Origin & Verification Transparency</h2>
+                </div>
+                <div class="card-body">
+                    <div class="transparency-grid">
+                        <div class="transparency-item">
+                            <span class="text-muted text-sm">Inventory Record ID</span>
+                            <strong>#RES-{{ "%04d" | format(resource.id) }}</strong>
+                        </div>
+                        <div class="transparency-item">
+                            <span class="text-muted text-sm">Managing Department Lead</span>
+                            <strong>{{ resource.owner.name }} ({{ resource.owner.role_title }})</strong>
+                        </div>
+                        <div class="transparency-item">
+                            <span class="text-muted text-sm">Information Source</span>
+                            <span class="badge badge-info">Owner Provided &amp; Department Verified</span>
+                        </div>
+                        <div class="transparency-item">
+                            <span class="text-muted text-sm">Last Registry Update</span>
+                            <span>{{ resource.updated_at.strftime('%b %d, %Y') if resource.updated_at else 'Recent' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Prerequisites, Safety, & Eligibility Sidebar -->
+        <div class="detail-side-col">
+            
+            <!-- Prerequisites & Safety Requirements Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Safety & Prerequisites</h2>
+                </div>
+                <div class="card-body">
+                    <div class="prereq-list">
+                        <!-- Training Requirement -->
+                        <div class="prereq-item">
+                            <div class="prereq-status-icon {% if resource.training_required %}prereq-warn{% else %}prereq-ok{% endif %}">
+                                {% if resource.training_required %}⚠️{% else %}✓{% endif %}
+                            </div>
+                            <div class="prereq-info">
+                                <strong>Certified Training Course</strong>
+                                {% if resource.training_required %}
+                                    <span class="text-danger-custom">Required before access</span>
+                                    <p class="text-sm mt-1 text-muted">{{ resource.training_details or 'Specific lab training course required.' }}</p>
+                                {% else %}
+                                    <span class="text-emerald">No prior training course required</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Supervision Requirement -->
+                        <div class="prereq-item">
+                            <div class="prereq-status-icon {% if resource.supervision_required %}prereq-warn{% else %}prereq-ok{% endif %}">
+                                {% if resource.supervision_required %}👥{% else %}✓{% endif %}
+                            </div>
+                            <div class="prereq-info">
+                                <strong>Faculty/Tech Supervision</strong>
+                                {% if resource.supervision_required %}
+                                    <span class="text-purple-custom">Supervised access only</span>
+                                    <p class="text-sm mt-1 text-muted">{{ resource.supervision_details or 'Must be attended by faculty or lab technician.' }}</p>
+                                {% else %}
+                                    <span class="text-emerald">Self-directed student use permitted</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Eligibility Requirement -->
+                        <div class="prereq-item">
+                            <div class="prereq-status-icon prereq-info-icon">
+                                🎓
+                            </div>
+                            <div class="prereq-info">
+                                <strong>Eligibility Criteria</strong>
+                                <p class="text-sm mt-1 text-muted">
+                                    {{ resource.eligibility or 'All verified campus students in good standing.' }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="card-title">Operational Status</h2>
+                </div>
+                <div class="card-body">
+                    <div class="status-callout status-callout-{{ resource.status }}">
+                        <div class="status-callout-title">
+                            <span class="badge {{ resource.status_badge_class }}">{{ resource.status_title }}</span>
+                        </div>
+                        <p class="status-callout-desc">
+                            {% if resource.is_active %}
+                                This resource is currently active in the campus pool and eligible for Stage 3 reservations.
+                            {% elif resource.is_maintenance %}
+                                Currently undergoing routine maintenance, calibration, or inspection. Booking will reopen once released.
+                            {% else %}
+                                Temporarily offline or reserved for academic term break.
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    {% if current_user.is_authenticated and resource.can_be_managed_by(current_user) %}
+                        <div class="mt-4 pt-3 border-top">
+                            <a href="{{ url_for('edit_resource', resource_id=resource.id) }}" class="btn btn-outline btn-block btn-sm">
+                                Manage Status or Update Details
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

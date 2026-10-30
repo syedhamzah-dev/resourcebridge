@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if action == 'create' %}Add Campus Resource{% else %}Edit {{ resource.name }}{% endif %} - ResourceBridge
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    
+    <div class="form-page-container">
+        <!-- Breadcrumb & Header -->
+        <div class="breadcrumb-trail">
+            <a href="{{ url_for('index') }}">Home</a>
+            <span class="breadcrumb-separator">/</span>
+            <a href="{{ url_for('resources_list') }}">Resource Catalogue</a>
+            <span class="breadcrumb-separator">/</span>
+            <span>{% if action == 'create' %}New Resource Registration{% else %}Edit Resource{% endif %}</span>
+        </div>
+
+        <div class="form-header-card">
+            <div class="form-header-icon">
+                {% if action == 'create' %}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                {% else %}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                {% endif %}
+            </div>
+            <div>
+                <h1 class="page-title">
+                    {% if action == 'create' %}
+                        Register Campus Resource
+                    {% else %}
+                        Edit: {{ resource.name }}
+                    {% endif %}
+                </h1>
+                <p class="page-subtitle">
+                    {% if action == 'create' %}
+                        Add institutional equipment or laboratory space to the ResourceBridge sharing network.
+                    {% else %}
+                        Update operational status, location, prerequisites, or usage rules for this resource.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Form Card -->
+        <div class="card form-main-card">
+            <form method="POST" action="" class="resource-form" id="resource-management-form">
+                <!-- CSRF Session Security Token -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <!-- Section 1: Basic Identification -->
+                <div class="form-section">
+                    <h3 class="form-section-title">
+                        <span class="section-step-num">1</span>
+                        <span>Basic Identification & Categorization</span>
+                    </h3>
+
+                    <div class="form-group mb-3">
+                        <label for="name" class="form-label">Resource Name <span class="text-danger">*</span></label>
+                        <input 
+                            type="text" 
+                            name="name" 
+                            id="name" 
+                            class="form-control" 
+                            placeholder="e.g. Sony FX3 Cinema Rig, Optics Cleanroom Suite, RTX 4090 Workstation" 
+                            value="{{ form_data.get('name', '') }}" 
+                            required 
+                            maxlength="120"
+                            autofocus
+                        >
+                        <span class="form-hint">A clear, distinctive name recognized by faculty and students.</span>
+                    </div>
+
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label for="category" class="form-label">Category <span class="text-danger">*</span></label>
+                            <select name="category" id="category" class="form-control" required>
+                                <option value="" disabled {% if not form_data.get('category') %}selected{% endif %}>Select a category...</option>
+                                {% for cat in VALID_CATEGORIES %}
+                                    <option value="{{ cat }}" {% if form_data.get('category') == cat %}selected{% endif %}>{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="resource_type" class="form-label">Resource Type <span class="text-danger">*</span></label>
+                            <select name="resource_type" id="resource_type" class="form-control" required>
+                                <option value="equipment" {% if form_data.get('resource_type') == 'equipment' or not form_data.get('resource_type') %}selected{% endif %}>Physical Equipment (movable/portable)</option>
+                                <option value="space" {% if form_data.get('resource_type') == 'space' %}selected{% endif %}>Space / Lab Facility (on-site room)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-3">
+                        <label for="description" class="form-label">Detailed Description <span class="text-danger">*</span></label>
+                        <textarea 
+                            name="description" 
+                            id="description" 
+                            rows="4" 
+                            class="form-control" 
+                            placeholder="Describe specifications, key hardware features, bundled accessories, or software packages..." 
+                            required
+                        >{{ form_data.get('description', '') }}</textarea>
+                    </div>
+                </div>
+
+                <!-- Section 2: Location & Availability Schedule -->
+                <div class="form-section">
+                    <h3 class="form-section-title">
+                        <span class="section-step-num">2</span>
+                        <span>Location & Operational Availability</span>
+                    </h3>
+
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label for="location" class="form-label">Campus Location & Room <span class="text-danger">*</span></label>
+                            <input 
+                                type="text" 
+                                name="location" 
+                                id="location" 
+                                class="form-control" 
+                                placeholder="e.g. Science Complex Rm 402, Media Cage Locker 12" 
+                                value="{{ form_data.get('location', '') }}" 
+                                required 
+                                maxlength="120"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="availability_info" class="form-label">Operating Hours / Availability Schedule <span class="text-danger">*</span></label>
+                            <input 
+                                type="text" 
+                                name="availability_info" 
+                                id="availability_info" 
+                                class="form-control" 
+                                placeholder="e.g. Mon-Fri 09:00 - 18:00, Max loan 48h" 
+                                value="{{ form_data.get('availability_info', '') }}" 
+                                required 
+                                maxlength="200"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-3">
+                        <label for="status" class="form-label">Operational Status <span class="text-danger">*</span></label>
+                        <select name="status" id="status" class="form-control" required>
+                            <option value="active" {% if form_data.get('status') == 'active' or not form_data.get('status') %}selected{% endif %}>Active in Catalog (Available for student discovery)</option>
+                            <option value="maintenance" {% if form_data.get('status') == 'maintenance' %}selected{% endif %}>Under Scheduled Maintenance / Calibration</option>
+                            <option value="inactive" {% if form_data.get('status') == 'inactive' %}selected{% endif %}>Temporarily Inactive (Offline)</option>
+                        </select>
+                        <span class="form-hint">You can change status anytime as equipment undergoes servicing or term breaks.</span>
+                    </div>
+                </div>
+
+                <!-- Section 3: Safety, Training & Prerequisites -->
+                <div class="form-section">
+                    <h3 class="form-section-title">
+                        <span class="section-step-num">3</span>
+                        <span>Safety, Induction & Supervision Prerequisites</span>
+                    </h3>
+
+                    <!-- Training Toggle & Details -->
+                    <div class="prereq-form-box mb-3">
+                        <label class="checkbox-label font-bold">
+                            <input 
+                                type="checkbox" 
+                                name="training_required" 
+                                id="training_required" 
+                                value="1" 
+                                {% if form_data.get('training_required') %}checked{% endif %}
+                            >
+                            <span>Require Certified Training Course before access</span>
+                        </label>
+                        <div class="mt-2" id="training-details-wrapper">
+                            <label for="training_details" class="form-label text-sm">Required Course / Induction Name</label>
+                            <input 
+                                type="text" 
+                                name="training_details" 
+                                id="training_details" 
+                                class="form-control" 
+                                placeholder="e.g. Level 2 Laser Safety Induction, MakerSpace Chemical Safety" 
+                                value="{{ form_data.get('training_details', '') }}"
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Supervision Toggle & Details -->
+                    <div class="prereq-form-box mb-3">
+                        <label class="checkbox-label font-bold">
+                            <input 
+                                type="checkbox" 
+                                name="supervision_required" 
+                                id="supervision_required" 
+                                value="1" 
+                                {% if form_data.get('supervision_required') %}checked{% endif %}
+                            >
+                            <span>Require Faculty or Lab Technician Supervision</span>
+                        </label>
+                        <div class="mt-2" id="supervision-details-wrapper">
+                            <label for="supervision_details" class="form-label text-sm">Supervision Protocol</label>
+                            <input 
+                                type="text" 
+                                name="supervision_details" 
+                                id="supervision_details" 
+                                class="form-control" 
+                                placeholder="e.g. Must be accompanied by faculty mentor or designated lab staff" 
+                                value="{{ form_data.get('supervision_details', '') }}"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="eligibility" class="form-label">Eligibility Requirements</label>
+                        <input 
+                            type="text" 
+                            name="eligibility" 
+                            id="eligibility" 
+                            class="form-control" 
+                            placeholder="e.g. Enrolled engineering or media students, Capstone project teams" 
+                            value="{{ form_data.get('eligibility', '') }}"
+                        >
+                    </div>
+
+                    <div class="form-group mt-3">
+                        <label for="usage_rules" class="form-label">Usage Rules & Check-out Accountability Conditions</label>
+                        <textarea 
+                            name="usage_rules" 
+                            id="usage_rules" 
+                            rows="3" 
+                            class="form-control" 
+                            placeholder="Specify return conditions, packaging rules, cleanup steps, and handling penalties..."
+                        >{{ form_data.get('usage_rules', '') }}</textarea>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons Row -->
+                <div class="form-submit-row">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btn-save-resource">
+                        {% if action == 'create' %}
+                            <span>Save & Publish Resource</span>
+                        {% else %}
+                            <span>Save Updates</span>
+                        {% endif %}
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </button>
+
+                    <a href="{% if action == 'edit' %}{{ url_for('resource_detail', resource_id=resource.id) }}{% else %}{{ url_for('resources_list') }}{% endif %}" class="btn btn-outline">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
