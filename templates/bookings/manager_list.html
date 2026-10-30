@@ -49,6 +49,15 @@
             <a href="{{ url_for('manager_bookings', status='approved') }}" class="filter-pill {% if status_filter == 'approved' %}active{% endif %}">
                 Approved
             </a>
+            <a href="{{ url_for('manager_bookings', status='checked_in') }}" class="filter-pill {% if status_filter == 'checked_in' %}active{% endif %}">
+                Checked In
+            </a>
+            <a href="{{ url_for('manager_bookings', status='return_pending') }}" class="filter-pill {% if status_filter == 'return_pending' %}active{% endif %}">
+                Return Pending
+            </a>
+            <a href="{{ url_for('manager_bookings', status='returned') }}" class="filter-pill {% if status_filter == 'returned' %}active{% endif %}">
+                Returned
+            </a>
             <a href="{{ url_for('manager_bookings', status='rejected') }}" class="filter-pill {% if status_filter == 'rejected' %}active{% endif %}">
                 Rejected
             </a>
@@ -79,7 +88,9 @@
                                     {% set conflict = conflicts_map.get(b.id) if conflicts_map else None %}
                                     <tr id="review-row-{{ b.id }}" class="{% if b.is_pending and conflict %}table-row-warning{% endif %}">
                                         <td>
-                                            <span class="badge badge-default">#BK-{{ "%04d" | format(b.id) }}</span>
+                                            <a href="{{ url_for('booking_detail', booking_id=b.id) }}" class="badge badge-default text-decoration-none">
+                                                #BK-{{ "%04d" | format(b.id) }}
+                                            </a>
                                             <div class="text-xs text-muted mt-1">{{ b.created_at.strftime('%b %d, %H:%M') }}</div>
                                         </td>
                                         <td>
@@ -143,11 +154,23 @@
                                             {% if b.is_pending and conflict %}
                                                 <div class="alert alert-danger p-2 text-xs mt-1 mb-0" role="alert">
                                                     <strong>⚠️ Conflict Alert!</strong><br>
-                                                    Overlaps with approved #BK-{{ "%04d" | format(conflict.id) }} ({{ conflict.user.name.split(' ')[0] }}).
+                                                    Overlaps with #BK-{{ "%04d" | format(conflict.id) }} ({{ conflict.user.name.split(' ')[0] }}).
                                                 </div>
                                             {% elif b.is_approved %}
                                                 <div class="text-xs text-emerald mt-1">
                                                     ✓ By {{ b.decision_maker.name if b.decision_maker else 'Manager' }}
+                                                </div>
+                                            {% elif b.is_checked_in %}
+                                                <div class="text-xs text-emerald mt-1">
+                                                    ● Active Loan
+                                                </div>
+                                            {% elif b.is_return_pending %}
+                                                <div class="text-xs text-warning mt-1">
+                                                    ⏳ Return Requested
+                                                </div>
+                                            {% elif b.is_returned %}
+                                                <div class="text-xs text-muted mt-1">
+                                                    ✓ Closed
                                                 </div>
                                             {% elif b.is_rejected %}
                                                 <div class="text-xs text-danger-custom mt-1">
@@ -156,13 +179,17 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-right">
-                                            {% if b.is_pending and b.can_be_managed_by(current_user) %}
-                                                <div class="d-flex flex-column gap-2 align-items-end">
+                                            <div class="d-flex flex-column gap-1 align-items-end">
+                                                <a href="{{ url_for('booking_detail', booking_id=b.id) }}" class="btn btn-primary btn-xs" id="manage-booking-{{ b.id }}">
+                                                    View / Manage &rarr;
+                                                </a>
+
+                                                {% if b.is_pending and b.can_be_managed_by(current_user) %}
                                                     <!-- Approve Button -->
                                                     <form action="{{ url_for('approve_booking', booking_id=b.id) }}" method="POST" onsubmit="return confirm('Approve this reservation request for {{ b.user.name }}?');">
                                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                         <button type="submit" class="btn btn-success btn-xs" id="approve-booking-{{ b.id }}" {% if conflict %}title="Warning: Conflict detected. Overlap check will reject approval."{% endif %}>
-                                                            ✓ Approve
+                                                            ✓ Quick Approve
                                                         </button>
                                                     </form>
 
@@ -170,8 +197,18 @@
                                                     <button type="button" class="btn btn-outline-danger btn-xs" onclick="document.getElementById('reject-form-{{ b.id }}').style.display = (document.getElementById('reject-form-{{ b.id }}').style.display === 'none' ? 'block' : 'none');">
                                                         ✕ Reject...
                                                     </button>
-                                                </div>
+                                                {% elif b.is_approved and b.can_be_managed_by(current_user) %}
+                                                    <a href="{{ url_for('booking_detail', booking_id=b.id) }}#checkin-condition-rating" class="btn btn-success btn-xs">
+                                                        Check In Handover &rarr;
+                                                    </a>
+                                                {% elif b.is_return_pending and b.can_be_managed_by(current_user) %}
+                                                    <a href="{{ url_for('booking_detail', booking_id=b.id) }}#return-condition-rating" class="btn btn-warning btn-xs">
+                                                        Inspect Return &rarr;
+                                                    </a>
+                                                {% endif %}
+                                            </div>
 
+                                            {% if b.is_pending and b.can_be_managed_by(current_user) %}
                                                 <!-- Inline Reject Reason Form -->
                                                 <div id="reject-form-{{ b.id }}" class="mt-2 text-left bg-light p-2 rounded border" style="display: none; min-width: 220px;">
                                                     <form action="{{ url_for('reject_booking', booking_id=b.id) }}" method="POST">
@@ -184,8 +221,6 @@
                                                         </div>
                                                     </form>
                                                 </div>
-                                            {% else %}
-                                                <span class="text-xs text-muted">No pending actions</span>
                                             {% endif %}
                                         </td>
                                     </tr>

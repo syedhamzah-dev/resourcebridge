@@ -2438,8 +2438,10 @@ a:hover {
     .filter-search-row {
         flex-direction: column;
     }
+}
+
 /* ==========================================================================
-   Stage 3: Booking Workflow, Reservations & Review Queue Styles
+   Stage 3 & 4: Booking Lifecycle, Handover Reports, Incidents & Audit Trail
    ========================================================================== */
 
 /* Filter Pills Bar */
@@ -2496,6 +2498,12 @@ a:hover {
     border: 1px solid #a7f3d0;
 }
 
+.badge-info {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
 .badge-purple {
     background: #f5f3ff;
     color: #6d28d9;
@@ -2540,6 +2548,17 @@ a:hover {
     color: #ffffff;
 }
 
+.btn-warning {
+    background: #f59e0b;
+    color: #ffffff;
+    border: 1px solid #d97706;
+}
+
+.btn-warning:hover {
+    background: #d97706;
+    color: #ffffff;
+}
+
 /* Conflict and Review Highlights */
 .table-row-warning {
     background-color: #fffbeb !important;
@@ -2565,3 +2584,170 @@ a:hover {
 .text-break {
     word-break: break-word;
 }
+
+/* ==========================================================================
+   Lifecycle Stepper Styles
+   ========================================================================== */
+.lifecycle-stepper-wrap {
+    width: 100%;
+}
+
+.lifecycle-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    position: relative;
+}
+
+.step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+    min-width: 80px;
+}
+
+.step-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #64748b;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    transition: all 0.25s ease;
+}
+
+.step-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 0.4rem;
+}
+
+.step-sub {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+
+.step-line {
+    flex: 1;
+    height: 3px;
+    background: #e2e8f0;
+    margin: 0 -10px;
+    position: relative;
+    top: -16px;
+    z-index: 1;
+    transition: all 0.25s ease;
+}
+
+.step-completed .step-icon {
+    background: #ecfdf5;
+    color: #059669;
+    border-color: #10b981;
+}
+
+.step-completed .step-label {
+    color: #0f172a;
+}
+
+.step-current .step-icon {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.step-current .step-label {
+    color: #1d4ed8;
+    font-weight: 700;
+}
+
+.line-active {
+    background: #10b981;
+}
+
+@media (max-width: 768px) {
+    .lifecycle-stepper {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .step-item {
+        flex-direction: row;
+        gap: 0.75rem;
+        align-items: center;
+        text-align: left;
+    }
+    .step-line {
+        display: none;
+    }
+}
+
+/* ==========================================================================
+   Audit Trail Timeline Styles
+   ========================================================================== */
+.audit-timeline {
+    position: relative;
+    padding-left: 1.5rem;
+    border-left: 2px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.audit-event-item {
+    position: relative;
+}
+
+.audit-event-item::before {
+    content: '';
+    position: absolute;
+    left: calc(-1.5rem - 5px);
+    top: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2563eb;
+    border: 2px solid #ffffff;
+}
+
+.audit-badge-col {
+    margin-bottom: 0.25rem;
+}
+
+.audit-content-col {
+    background: #ffffff;
+}
+
+/* Action Boxes & Alert utilities */
+.action-box {
+    background: #ffffff;
+}
+
+.bg-warning-light {
+    background: #fffbeb !important;
+}
+
+.border-warning {
+    border-color: #fde68a !important;
+}
+
+.text-warning-dark {
+    color: #92400e !important;
+}
+
+.bg-success-light {
+    background: #f0fdf4 !important;
+}
+
+.border-3 {
+    border-width: 3px !important;
+}

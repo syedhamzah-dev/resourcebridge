@@ -1,0 +1,604 @@
+{% extends "base.html" %}
+
+{% block title %}Booking #BK-{{ "%04d" | format(booking.id) }} - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="page-container py-5">
+    <div class="container">
+
+        <!-- Breadcrumb Navigation -->
+        <nav class="breadcrumb-nav mb-4" aria-label="breadcrumb">
+            <ol class="breadcrumb-list">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="separator">/</li>
+                <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="separator">/</li>
+                {% if current_user.can_manage_resources %}
+                    <li><a href="{{ url_for('manager_bookings') }}">Review Queue</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('my_bookings') }}">My Bookings</a></li>
+                {% endif %}
+                <li class="separator">/</li>
+                <li class="active" aria-current="page">#BK-{{ "%04d" | format(booking.id) }}</li>
+            </ol>
+        </nav>
+
+        <!-- Booking Header -->
+        <div class="booking-detail-header card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                            <span class="badge badge-default text-sm">#BK-{{ "%04d" | format(booking.id) }}</span>
+                            <span class="badge {{ booking.status_badge_class }} text-sm font-semibold">
+                                {{ booking.status_title }}
+                            </span>
+                            <span class="badge {{ booking.resource.type_badge_class }} text-xs">
+                                {{ booking.resource.resource_type | capitalize }}
+                            </span>
+                        </div>
+                        <h1 class="page-title mb-1">
+                            <a href="{{ url_for('resource_detail', resource_id=booking.resource.id) }}" class="text-dark">
+                                {{ booking.resource.name }}
+                            </a>
+                        </h1>
+                        <p class="text-muted mb-0">
+                            📍 {{ booking.resource.location }} &bull; {{ booking.resource.category }}
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        {% if current_user.can_manage_resources %}
+                            <a href="{{ url_for('manager_bookings') }}" class="btn btn-outline btn-sm">
+                                &larr; Back to Queue
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('my_bookings') }}" class="btn btn-outline btn-sm">
+                                &larr; Back to My Bookings
+                            </a>
+                        {% endif %}
+                        <a href="{{ url_for('resource_detail', resource_id=booking.resource.id) }}" class="btn btn-outline-primary btn-sm">
+                            View Resource
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Lifecycle Stepper Indicator -->
+                <div class="lifecycle-stepper-wrap mt-4 pt-3 border-top">
+                    <div class="lifecycle-stepper">
+                        <!-- Step 1: Requested -->
+                        <div class="step-item {% if booking.status in ('pending', 'approved', 'checked_in', 'return_pending', 'returned') %}step-completed{% endif %} {% if booking.status == 'pending' %}step-current{% endif %}">
+                            <div class="step-icon">1</div>
+                            <div class="step-label">Requested</div>
+                            <div class="step-sub">{{ booking.created_at.strftime('%b %d') }}</div>
+                        </div>
+                        <div class="step-line {% if booking.status in ('approved', 'checked_in', 'return_pending', 'returned') %}line-active{% endif %}"></div>
+
+                        <!-- Step 2: Approved -->
+                        <div class="step-item {% if booking.status in ('approved', 'checked_in', 'return_pending', 'returned') %}step-completed{% endif %} {% if booking.status == 'approved' %}step-current{% endif %}">
+                            <div class="step-icon">2</div>
+                            <div class="step-label">Approved</div>
+                            <div class="step-sub">
+                                {% if booking.decided_at %}{{ booking.decided_at.strftime('%b %d') }}{% else %}Queue{% endif %}
+                            </div>
+                        </div>
+                        <div class="step-line {% if booking.status in ('checked_in', 'return_pending', 'returned') %}line-active{% endif %}"></div>
+
+                        <!-- Step 3: Checked In (Active Loan) -->
+                        <div class="step-item {% if booking.status in ('checked_in', 'return_pending', 'returned') %}step-completed{% endif %} {% if booking.status == 'checked_in' %}step-current{% endif %}">
+                            <div class="step-icon">3</div>
+                            <div class="step-label">Checked In</div>
+                            <div class="step-sub">
+                                {% if booking.checked_in_at %}{{ booking.checked_in_at.strftime('%b %d') }}{% else %}Handover{% endif %}
+                            </div>
+                        </div>
+                        <div class="step-line {% if booking.status in ('return_pending', 'returned') %}line-active{% endif %}"></div>
+
+                        <!-- Step 4: Return Pending -->
+                        <div class="step-item {% if booking.status in ('return_pending', 'returned') %}step-completed{% endif %} {% if booking.status == 'return_pending' %}step-current{% endif %}">
+                            <div class="step-icon">4</div>
+                            <div class="step-label">Return Pending</div>
+                            <div class="step-sub">
+                                {% if booking.return_requested_at %}{{ booking.return_requested_at.strftime('%b %d') }}{% else %}Pending{% endif %}
+                            </div>
+                        </div>
+                        <div class="step-line {% if booking.status == 'returned' %}line-active{% endif %}"></div>
+
+                        <!-- Step 5: Returned & Completed -->
+                        <div class="step-item {% if booking.status == 'returned' %}step-completed step-current{% endif %}">
+                            <div class="step-icon">5</div>
+                            <div class="step-label">Returned</div>
+                            <div class="step-sub">
+                                {% if booking.returned_at %}{{ booking.returned_at.strftime('%b %d') }}{% else %}Complete{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if booking.status == 'rejected' %}
+                        <div class="alert alert-danger mt-3 mb-0" role="alert">
+                            <strong>✕ Booking Request Rejected</strong><br>
+                            Reason: {{ booking.rejection_reason or 'Capacity constraint or prerequisite deficit.' }}
+                        </div>
+                    {% elif booking.status == 'cancelled' %}
+                        <div class="alert alert-default mt-3 mb-0" role="alert">
+                            <strong>Booking Request Cancelled</strong> &mdash; This reservation was withdrawn.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Layout (2 Columns) -->
+        <div class="row g-4">
+            
+            <!-- Left Column: Core Data, Condition Reports, Incidents, Audit Trail -->
+            <div class="col-lg-8">
+                
+                <!-- Card 1: Reservation Details -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h2 class="card-title h5 mb-0">Reservation Schedule &amp; Purpose</h2>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="text-xs text-muted text-uppercase font-semibold">Borrower / Student</div>
+                                    <div class="fw-bold mt-1">{{ booking.user.name }}</div>
+                                    <div class="text-xs text-muted">{{ booking.user.email }}</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="text-xs text-muted text-uppercase font-semibold">Managed By</div>
+                                    <div class="fw-bold mt-1">{{ booking.resource.owner.name }}</div>
+                                    <div class="text-xs text-muted">{{ booking.resource.owner.email }}</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="text-xs text-muted text-uppercase font-semibold">Start Window</div>
+                                    <div class="fw-bold mt-1">{{ booking.start_time.strftime('%a, %b %d, %Y') }}</div>
+                                    <div class="text-xs text-muted">{{ booking.start_time.strftime('%H:%M UTC') }}</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="text-xs text-muted text-uppercase font-semibold">End Window &amp; Duration</div>
+                                    <div class="fw-bold mt-1">{{ booking.end_time.strftime('%a, %b %d, %Y') }}</div>
+                                    <div class="text-xs text-muted">{{ booking.end_time.strftime('%H:%M UTC') }} ({{ booking.duration_hours }} hours)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <h3 class="text-xs text-muted text-uppercase font-semibold mb-1">Stated Purpose</h3>
+                            <p class="p-3 bg-light rounded mb-0 text-sm">
+                                "{{ booking.purpose }}"
+                            </p>
+                        </div>
+
+                        {% if booking.resource.training_required or booking.resource.supervision_required %}
+                            <div class="p-3 bg-warning-light rounded border border-warning">
+                                <div class="fw-bold text-xs text-warning-dark text-uppercase mb-1">Safety &amp; Compliance Notes</div>
+                                {% if booking.resource.training_required %}
+                                    <div class="text-xs mb-1">⚠️ <strong>Training Prerequisite:</strong> {{ booking.resource.training_details }}</div>
+                                {% endif %}
+                                {% if booking.resource.supervision_required %}
+                                    <div class="text-xs">👥 <strong>Faculty Supervision:</strong> {{ booking.resource.supervision_details }}</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Card 2: Handover Condition Reports (Initial vs Final) -->
+                <div class="card shadow-sm border-0 mb-4" id="condition-reports-card">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h2 class="card-title h5 mb-0">Handover Condition Reports</h2>
+                        <span class="badge badge-light text-xs">Physical Accountability</span>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="alert alert-info text-xs mb-4" role="alert">
+                            <strong>Fairness Protocol:</strong> Initial condition is documented upon release; final condition is recorded upon return. Discrepancies are reviewed constructively without automatic borrower fault or arbitrary penalty.
+                        </div>
+
+                        <div class="row g-3">
+                            <!-- Initial Check-In Report -->
+                            <div class="col-md-6">
+                                <div class="p-3 border rounded h-100 bg-white">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h3 class="h6 mb-0">1. Check-In Condition</h3>
+                                        {% if initial_report %}
+                                            <span class="badge {{ initial_report.rating_badge_class }}">
+                                                {{ initial_report.rating_title }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-light text-xs">Pending Check-In</span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if initial_report %}
+                                        <div class="text-xs text-muted mb-2">
+                                            Inspected by <strong>{{ initial_report.reporter.name }}</strong> on {{ initial_report.created_at.strftime('%b %d, %Y %H:%M') }}
+                                        </div>
+                                        <div class="p-2 bg-light rounded text-xs text-break">
+                                            {{ initial_report.notes }}
+                                        </div>
+                                    {% else %}
+                                        <div class="text-center py-4 text-muted text-xs">
+                                            Initial condition report will be recorded when the authorized manager completes check-in handover.
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Final Check-Out (Return) Report -->
+                            <div class="col-md-6">
+                                <div class="p-3 border rounded h-100 bg-white">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h3 class="h6 mb-0">2. Return Condition</h3>
+                                        {% if final_report %}
+                                            <span class="badge {{ final_report.rating_badge_class }}">
+                                                {{ final_report.rating_title }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-light text-xs">Pending Return</span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if final_report %}
+                                        <div class="text-xs text-muted mb-2">
+                                            Inspected by <strong>{{ final_report.reporter.name }}</strong> on {{ final_report.created_at.strftime('%b %d, %Y %H:%M') }}
+                                        </div>
+                                        <div class="p-2 bg-light rounded text-xs text-break">
+                                            {{ final_report.notes }}
+                                        </div>
+                                    {% else %}
+                                        <div class="text-center py-4 text-muted text-xs">
+                                            Return condition report will be recorded during physical return inspection.
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Incidents & Safety Concerns -->
+                <div class="card shadow-sm border-0 mb-4" id="incidents-card">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <h2 class="card-title h5 mb-0">Incidents &amp; Safety Concerns</h2>
+                            <span class="badge badge-default">{{ incidents | length }}</span>
+                        </div>
+                        <button type="button" class="btn btn-outline-danger btn-xs" onclick="const f = document.getElementById('new-incident-form-wrap'); f.style.display = (f.style.display === 'none' ? 'block' : 'none');">
+                            + Report Incident
+                        </button>
+                    </div>
+                    <div class="card-body p-4">
+
+                        <!-- Collapsible New Incident Form -->
+                        <div id="new-incident-form-wrap" class="p-3 border rounded bg-light mb-4" style="display: none;">
+                            <h3 class="h6 mb-2 text-danger">Submit Incident or Concern</h3>
+                            <p class="text-xs text-muted mb-3">
+                                Report equipment malfunction, missing accessories, damage, late return, or safety hazards. All reports are logged transparently.
+                            </p>
+                            <form action="{{ url_for('report_incident', booking_id=booking.id) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-sm-6">
+                                        <label class="text-xs font-semibold d-block mb-1">Incident Category *</label>
+                                        <select name="category" class="form-control text-xs" required>
+                                            <option value="">Select Category...</option>
+                                            {% for cat in VALID_INCIDENT_CATEGORIES %}
+                                                <option value="{{ cat }}">{{ cat.replace('_', ' ') | title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="text-xs font-semibold d-block mb-1">Severity Assessment</label>
+                                        <select name="severity" class="form-control text-xs">
+                                            {% for sev in VALID_INCIDENT_SEVERITIES %}
+                                                <option value="{{ sev }}" {% if sev == 'medium' %}selected{% endif %}>{{ sev | title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="text-xs font-semibold d-block mb-1">Incident Description * (min 10 characters)</label>
+                                    <textarea name="description" class="form-control text-xs" rows="3" required placeholder="Describe what occurred, any accessories affected, or immediate safety precautions taken..."></textarea>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-ghost btn-xs" onclick="document.getElementById('new-incident-form-wrap').style.display='none';">Cancel</button>
+                                    <button type="submit" class="btn btn-danger btn-xs" id="submit-incident-btn">Submit Incident Report</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Incident List -->
+                        {% if incidents %}
+                            <div class="incident-items-list d-flex flex-column gap-3">
+                                {% for inc in incidents %}
+                                    <div class="incident-item p-3 border rounded bg-white" id="incident-item-{{ inc.id }}">
+                                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                                            <div>
+                                                <span class="badge {{ inc.severity_badge_class }} text-xs">{{ inc.severity | upper }}</span>
+                                                <span class="fw-bold ms-1 text-sm">{{ inc.category_title }}</span>
+                                                <span class="text-xs text-muted ms-2">#INC-{{ inc.id }} &bull; Reported by {{ inc.reporter.name }} ({{ inc.created_at.strftime('%b %d, %H:%M') }})</span>
+                                            </div>
+                                            <span class="badge {{ inc.status_badge_class }}">
+                                                {{ inc.status_title }}
+                                            </span>
+                                        </div>
+                                        <p class="text-xs mb-2 text-dark bg-light p-2 rounded">
+                                            {{ inc.description }}
+                                        </p>
+
+                                        {% if inc.resolution_notes %}
+                                            <div class="p-2 border-start border-success border-3 bg-success-light text-xs rounded mb-2">
+                                                <strong>Resolution Notes:</strong> {{ inc.resolution_notes }}
+                                                {% if inc.resolved_by %}
+                                                    <div class="text-muted mt-1">Resolved by {{ inc.resolved_by.name }} on {{ inc.resolved_at.strftime('%b %d, %Y %H:%M') }}</div>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+
+                                        <!-- Manager Resolution Controls -->
+                                        {% if booking.can_be_managed_by(current_user) and not inc.is_resolved %}
+                                            <div class="mt-2 pt-2 border-top">
+                                                <button type="button" class="btn btn-outline btn-xs" onclick="const el = document.getElementById('resolve-form-{{ inc.id }}'); el.style.display = (el.style.display === 'none' ? 'block' : 'none');">
+                                                    Manage / Resolve Issue...
+                                                </button>
+                                                <div id="resolve-form-{{ inc.id }}" class="mt-2 p-2 bg-light rounded" style="display: none;">
+                                                    <form action="{{ url_for('resolve_incident', incident_id=inc.id) }}" method="POST">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <div class="row g-2 mb-2">
+                                                            <div class="col-sm-6">
+                                                                <label class="text-xs font-semibold d-block mb-1">Status</label>
+                                                                <select name="status" class="form-control text-xs">
+                                                                    <option value="under_review" {% if inc.status == 'under_review' %}selected{% endif %}>Under Review</option>
+                                                                    <option value="resolved" {% if inc.status == 'resolved' %}selected{% endif %}>Resolved</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mb-2">
+                                                            <label class="text-xs font-semibold d-block mb-1">Resolution &amp; Corrective Action Notes *</label>
+                                                            <textarea name="resolution_notes" class="form-control text-xs" rows="2" required placeholder="Detail corrective action, replacement parts, or maintenance steps taken..."></textarea>
+                                                        </div>
+                                                        <div class="d-flex justify-content-end gap-2">
+                                                            <button type="button" class="btn btn-ghost btn-xs" onclick="document.getElementById('resolve-form-{{ inc.id }}').style.display='none';">Cancel</button>
+                                                            <button type="submit" class="btn btn-success btn-xs" id="resolve-incident-btn-{{ inc.id }}">Save Resolution</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4 text-muted text-xs">
+                                No incidents or concerns reported for this reservation.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Card 4: Server-Side Audit Trail -->
+                <div class="card shadow-sm border-0 mb-4" id="audit-trail-card">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h2 class="card-title h5 mb-0">Booking Audit Trail</h2>
+                        <span class="badge badge-light text-xs">Immutable Server Log</span>
+                    </div>
+                    <div class="card-body p-4">
+                        {% if audit_logs %}
+                            <div class="audit-timeline">
+                                {% for event in audit_logs %}
+                                    <div class="audit-event-item">
+                                        <div class="audit-badge-col">
+                                            <span class="badge {{ event.event_badge_class }} text-xs">
+                                                {{ event.event_type.replace('_', ' ') | title }}
+                                            </span>
+                                        </div>
+                                        <div class="audit-content-col">
+                                            <div class="d-flex justify-content-between align-items-baseline flex-wrap gap-2">
+                                                <div class="fw-bold text-sm">{{ event.summary }}</div>
+                                                <div class="text-xs text-muted">{{ event.created_at.strftime('%b %d, %Y %H:%M:%S') }}</div>
+                                            </div>
+                                            {% if event.actor %}
+                                                <div class="text-xs text-muted">
+                                                    Actor: <strong>{{ event.actor.name }}</strong> ({{ event.actor.role_title }})
+                                                </div>
+                                            {% endif %}
+                                            {% if event.details %}
+                                                <div class="text-xs text-secondary mt-1 bg-light p-2 rounded">
+                                                    {{ event.details }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4 text-muted text-xs">
+                                No audit events recorded yet.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Interactive Action Controls -->
+            <div class="col-lg-4">
+                
+                <!-- Action Controls Card -->
+                <div class="card shadow-sm border-0 mb-4 sticky-top" style="top: 2rem;">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h2 class="card-title h5 mb-0">Lifecycle Actions</h2>
+                    </div>
+                    <div class="card-body p-4">
+
+                        <!-- Action Form 1: Check-In (Manager Only, status == approved) -->
+                        {% if booking.status == 'approved' and booking.can_be_managed_by(current_user) %}
+                            <div class="action-box p-3 border rounded bg-light mb-3">
+                                <h3 class="h6 mb-2 text-primary">Physical Check-In Handover</h3>
+                                <p class="text-xs text-muted mb-3">
+                                    Verify student identity, inspect resource condition, and hand over the equipment to initiate active loan.
+                                </p>
+                                <form action="{{ url_for('checkin_booking', booking_id=booking.id) }}" method="POST">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="mb-3">
+                                        <label class="text-xs font-semibold d-block mb-1">Initial Condition Rating *</label>
+                                        <select name="condition_rating" class="form-control text-xs" required id="checkin-condition-rating">
+                                            {% for rating in VALID_CONDITION_RATINGS %}
+                                                <option value="{{ rating }}" {% if rating == 'excellent' %}selected{% endif %}>
+                                                    {{ rating.replace('_', ' ') | title }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="text-xs font-semibold d-block mb-1">Check-In Notes *</label>
+                                        <textarea name="notes" class="form-control text-xs" rows="3" required placeholder="State operational condition, included cables/accessories, calibration date..." id="checkin-notes"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-success btn-sm w-100" id="btn-complete-checkin">
+                                        ✓ Complete Check-In &amp; Activate Loan
+                                    </button>
+                                </form>
+                            </div>
+                        {% endif %}
+
+                        <!-- Action Form 2: Request Return (Student or Manager, status == checked_in) -->
+                        {% if booking.status == 'checked_in' and (booking.user_id == current_user.id or booking.can_be_managed_by(current_user)) %}
+                            <div class="action-box p-3 border rounded bg-light mb-3">
+                                <h3 class="h6 mb-2 text-primary">Return Handover</h3>
+                                <p class="text-xs text-muted mb-3">
+                                    Finished using the resource? Request return to notify the facility manager to conduct physical inspection.
+                                </p>
+                                <form action="{{ url_for('request_return_booking', booking_id=booking.id) }}" method="POST" onsubmit="return confirm('Notify facility manager that resource is ready for return inspection?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-warning btn-sm w-100" id="btn-request-return">
+                                        &rarr; Request Return Handover
+                                    </button>
+                                </form>
+                            </div>
+                        {% endif %}
+
+                        <!-- Action Form 3: Final Return & Inspection (Manager Only, status in (checked_in, return_pending)) -->
+                        {% if booking.status in ('checked_in', 'return_pending') and booking.can_be_managed_by(current_user) %}
+                            <div class="action-box p-3 border rounded bg-light mb-3">
+                                <h3 class="h6 mb-2 text-primary">Verify Return &amp; Complete</h3>
+                                <p class="text-xs text-muted mb-3">
+                                    Inspect equipment components upon return. Record final condition rating and inspection notes to officially close the booking.
+                                </p>
+                                <form action="{{ url_for('return_booking', booking_id=booking.id) }}" method="POST">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="mb-3">
+                                        <label class="text-xs font-semibold d-block mb-1">Final Condition Rating *</label>
+                                        <select name="condition_rating" class="form-control text-xs" required id="return-condition-rating">
+                                            {% for rating in VALID_CONDITION_RATINGS %}
+                                                <option value="{{ rating }}" {% if rating == 'good' %}selected{% endif %}>
+                                                    {{ rating.replace('_', ' ') | title }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="text-xs font-semibold d-block mb-1">Return Inspection Notes *</label>
+                                        <textarea name="notes" class="form-control text-xs" rows="3" required placeholder="Verify accessories, sensor/optics, battery charge, cables returned..." id="return-notes"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-sm w-100" id="btn-complete-return">
+                                        ✓ Verify Return &amp; Close Booking
+                                    </button>
+                                </form>
+                            </div>
+                        {% endif %}
+
+                        <!-- Action Form 4: Cancel Pending (Student requester or admin, status == pending) -->
+                        {% if booking.status == 'pending' and (booking.user_id == current_user.id or current_user.is_admin) %}
+                            <div class="action-box p-3 border rounded bg-light mb-3">
+                                <h3 class="h6 mb-2 text-muted">Withdraw Request</h3>
+                                <p class="text-xs text-muted mb-2">
+                                    No longer need this reservation? Cancel before manager review to free up the slot.
+                                </p>
+                                <form action="{{ url_for('cancel_booking', booking_id=booking.id) }}" method="POST" onsubmit="return confirm('Cancel this pending reservation request?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100" id="btn-cancel-booking">
+                                        Cancel Reservation Request
+                                    </button>
+                                </form>
+                            </div>
+                        {% endif %}
+
+                        <!-- Action Form 5: Manager Approve/Reject (Manager Only, status == pending) -->
+                        {% if booking.status == 'pending' and booking.can_be_managed_by(current_user) %}
+                            <div class="action-box p-3 border rounded bg-light mb-3">
+                                <h3 class="h6 mb-2 text-primary">Manager Review Decision</h3>
+                                <form action="{{ url_for('approve_booking', booking_id=booking.id) }}" method="POST" class="mb-2" onsubmit="return confirm('Approve this reservation request?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-success btn-sm w-100" id="btn-approve-booking">
+                                        ✓ Approve Request
+                                    </button>
+                                </form>
+
+                                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="const f = document.getElementById('sidebar-reject-form'); f.style.display = (f.style.display === 'none' ? 'block' : 'none');">
+                                    ✕ Reject Request...
+                                </button>
+                                <div id="sidebar-reject-form" class="mt-2" style="display: none;">
+                                    <form action="{{ url_for('reject_booking', booking_id=booking.id) }}" method="POST">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <label class="text-xs font-semibold d-block mb-1">Rejection Reason *</label>
+                                        <textarea name="rejection_reason" class="form-control text-xs mb-2" rows="2" required placeholder="Prerequisite deficit, maintenance, or conflict..."></textarea>
+                                        <button type="submit" class="btn btn-danger btn-xs w-100">Confirm Rejection</button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Status Informational Box -->
+                        {% if booking.status == 'returned' %}
+                            <div class="alert alert-success text-xs mb-0">
+                                <strong>✓ Completed &amp; Reconciled</strong><br>
+                                This booking has successfully concluded all lifecycle stages. Both condition reports and incident logs have been archived into the audit trail.
+                            </div>
+                        {% elif booking.status == 'approved' and not booking.can_be_managed_by(current_user) %}
+                            <div class="alert alert-info text-xs mb-0">
+                                <strong>Approved Reservation:</strong><br>
+                                Please arrive at {{ booking.resource.location }} at your scheduled start time ({{ booking.start_time.strftime('%b %d, %H:%M') }}) for physical check-in and handover inspection.
+                            </div>
+                        {% elif booking.status == 'return_pending' and not booking.can_be_managed_by(current_user) %}
+                            <div class="alert alert-warning text-xs mb-0">
+                                <strong>Return Pending:</strong><br>
+                                Please hand the resource back to facility staff at {{ booking.resource.location }} to complete the final return inspection.
+                            </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+
+                <!-- Campus Facility Guidelines Card -->
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h2 class="card-title h6 mb-0">Facility Support &amp; Hours</h2>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="text-xs text-muted mb-2">
+                            <strong>Location:</strong> {{ booking.resource.location }}
+                        </div>
+                        <div class="text-xs text-muted mb-2">
+                            <strong>Operating Hours:</strong> {{ booking.resource.availability_info }}
+                        </div>
+                        <div class="text-xs text-muted">
+                            <strong>Responsible Lead:</strong> {{ booking.resource.owner.name }} ({{ booking.resource.owner.email }})
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+{% endblock %}

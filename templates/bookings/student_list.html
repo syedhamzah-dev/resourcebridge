@@ -34,13 +34,22 @@
         <!-- Filter Tabs -->
         <div class="filter-pills-bar mb-4">
             <a href="{{ url_for('my_bookings') }}" class="filter-pill {% if not status_filter or status_filter == 'all' %}active{% endif %}">
-                All Requests ({{ bookings | length if (not status_filter or status_filter == 'all') else 'View All' }})
+                All ({{ bookings | length if (not status_filter or status_filter == 'all') else 'View All' }})
             </a>
             <a href="{{ url_for('my_bookings', status='pending') }}" class="filter-pill {% if status_filter == 'pending' %}active{% endif %}">
-                Pending Review
+                Pending
             </a>
             <a href="{{ url_for('my_bookings', status='approved') }}" class="filter-pill {% if status_filter == 'approved' %}active{% endif %}">
                 Approved
+            </a>
+            <a href="{{ url_for('my_bookings', status='checked_in') }}" class="filter-pill {% if status_filter == 'checked_in' %}active{% endif %}">
+                Checked In
+            </a>
+            <a href="{{ url_for('my_bookings', status='return_pending') }}" class="filter-pill {% if status_filter == 'return_pending' %}active{% endif %}">
+                Return Pending
+            </a>
+            <a href="{{ url_for('my_bookings', status='returned') }}" class="filter-pill {% if status_filter == 'returned' %}active{% endif %}">
+                Returned
             </a>
             <a href="{{ url_for('my_bookings', status='rejected') }}" class="filter-pill {% if status_filter == 'rejected' %}active{% endif %}">
                 Rejected
@@ -71,7 +80,9 @@
                                 {% for b in bookings %}
                                     <tr id="booking-row-{{ b.id }}">
                                         <td>
-                                            <span class="badge badge-default">#BK-{{ "%04d" | format(b.id) }}</span>
+                                            <a href="{{ url_for('booking_detail', booking_id=b.id) }}" class="badge badge-default text-decoration-none">
+                                                #BK-{{ "%04d" | format(b.id) }}
+                                            </a>
                                             <div class="text-xs text-muted mt-1">{{ b.created_at.strftime('%b %d, %H:%M') }}</div>
                                         </td>
                                         <td>
@@ -111,6 +122,18 @@
                                                 {% if b.decided_at %}
                                                     <div class="text-xs text-muted">{{ b.decided_at.strftime('%b %d, %H:%M') }}</div>
                                                 {% endif %}
+                                            {% elif b.is_checked_in %}
+                                                <div class="text-xs text-emerald">
+                                                    ● Active Loan (Checked in {{ b.checked_in_at.strftime('%b %d') if b.checked_in_at else '' }})
+                                                </div>
+                                            {% elif b.is_return_pending %}
+                                                <div class="text-xs text-warning">
+                                                    ⏳ Return inspection pending handover
+                                                </div>
+                                            {% elif b.is_returned %}
+                                                <div class="text-xs text-muted">
+                                                    ✓ Returned &amp; Completed
+                                                </div>
                                             {% elif b.is_rejected %}
                                                 <div class="text-xs text-danger-custom">
                                                     ✕ Reason: {{ b.rejection_reason or 'Capacity constraint or prerequisite not met.' }}
@@ -130,18 +153,19 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-right">
-                                            {% if b.is_pending %}
-                                                <form action="{{ url_for('cancel_booking', booking_id=b.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Cancel this pending reservation request?');">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-outline-danger btn-xs" id="cancel-booking-{{ b.id }}">
-                                                        Cancel Request
-                                                    </button>
-                                                </form>
-                                            {% else %}
-                                                <a href="{{ url_for('resource_detail', resource_id=b.resource.id) }}" class="btn btn-outline btn-xs">
-                                                    View Resource
+                                            <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                                <a href="{{ url_for('booking_detail', booking_id=b.id) }}" class="btn btn-primary btn-xs" id="view-detail-{{ b.id }}">
+                                                    Details &rarr;
                                                 </a>
-                                            {% endif %}
+                                                {% if b.is_pending %}
+                                                    <form action="{{ url_for('cancel_booking', booking_id=b.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Cancel this pending reservation request?');">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-outline-danger btn-xs" id="cancel-booking-{{ b.id }}">
+                                                            Cancel
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
                                         </td>
                                     </tr>
                                 {% endfor %}

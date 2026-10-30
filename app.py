@@ -33,10 +33,19 @@ from models import (
     User,
     Resource,
     Booking,
+    ConditionReport,
+    Incident,
+    BookingAuditLog,
+    log_booking_event,
     VALID_CATEGORIES,
     VALID_RESOURCE_TYPES,
     VALID_STATUSES,
     VALID_BOOKING_STATUSES,
+    VALID_CONDITION_RATINGS,
+    VALID_REPORT_STAGES,
+    VALID_INCIDENT_CATEGORIES,
+    VALID_INCIDENT_STATUSES,
+    VALID_INCIDENT_SEVERITIES,
     check_booking_conflict
 )
 
@@ -134,6 +143,11 @@ def create_app(test_config=None):
             'VALID_RESOURCE_TYPES': VALID_RESOURCE_TYPES,
             'VALID_STATUSES': VALID_STATUSES,
             'VALID_BOOKING_STATUSES': VALID_BOOKING_STATUSES,
+            'VALID_CONDITION_RATINGS': VALID_CONDITION_RATINGS,
+            'VALID_REPORT_STAGES': VALID_REPORT_STAGES,
+            'VALID_INCIDENT_CATEGORIES': VALID_INCIDENT_CATEGORIES,
+            'VALID_INCIDENT_STATUSES': VALID_INCIDENT_STATUSES,
+            'VALID_INCIDENT_SEVERITIES': VALID_INCIDENT_SEVERITIES,
             'pending_reviews_count': pending_count
         }
 
@@ -668,6 +682,14 @@ def create_app(test_config=None):
                 status='pending'
             )
             db.session.add(booking)
+            db.session.flush()
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'requested',
+                f"Booking requested by {current_user.name}",
+                f"Requested reservation from {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')}. Purpose: {purpose}"
+            )
             db.session.commit()
 
             msg = (
@@ -690,7 +712,7 @@ def create_app(test_config=None):
         """
         Student / User Bookings Portal.
         Displays personal booking history, review status badges, manager decision notes,
-        and cancellation controls for pending reservations.
+        and links to the detailed booking lifecycle view.
         """
         status_filter = request.args.get('status', 'all').strip()
         query = Booking.query.filter_by(user_id=current_user.id)
@@ -699,6 +721,39 @@ def create_app(test_config=None):
 
         bookings = query.order_by(Booking.created_at.desc()).all()
         return render_template('bookings/student_list.html', bookings=bookings, status_filter=status_filter)
+
+    @app.route('/bookings/<int:booking_id>')
+    @login_required
+    def booking_detail(booking_id):
+        """
+        Comprehensive Booking Lifecycle Detail View.
+        Server-side privacy enforcement:
+        Accessible only by:
+        - The student who requested the booking (requester)
+        - The manager who owns the resource
+        - System administrators
+        All other users receive HTTP 403 Forbidden.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if not booking.can_be_viewed_by(current_user):
+            flash("Access denied: You are not authorized to view this booking.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        initial_report = booking.get_initial_condition_report()
+        final_report = booking.get_final_condition_report()
+
+        return render_template(
+            'bookings/detail.html',
+            booking=booking,
+            initial_report=initial_report,
+            final_report=final_report,
+            incidents=booking.incidents,
+            audit_logs=booking.audit_logs
+        )
 
     @app.route('/bookings/<int:booking_id>/cancel', methods=['POST'])
     @login_required
@@ -728,6 +783,13 @@ def create_app(test_config=None):
 
         try:
             booking.status = 'cancelled'
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'cancelled',
+                f"Booking cancelled by {current_user.name}",
+                "Reservation request withdrawn by requester."
+            )
             db.session.commit()
             flash(f"Booking request #{booking.id} for '{booking.resource.name}' has been cancelled.", "info")
         except Exception:
@@ -740,7 +802,7 @@ def create_app(test_config=None):
     @login_required
     def manager_bookings():
         """
-        Manager & Admin Approval Queue.
+        Manager & Admin Approval Queue and Lifecycle Management.
         Department managers see requests for resources they own;
         Campus administrators see requests across all college departments.
         Calculates conflict alerts dynamically for pending requests.
@@ -785,7 +847,7 @@ def create_app(test_config=None):
         1. Authorization: Only resource owner manager or admin can approve.
         2. Status: Only pending bookings can be approved.
         3. Operational status: Cannot approve if resource is in maintenance/inactive.
-        4. Strict Conflict Detection: Cannot approve if another approved booking overlaps.
+        4. Strict Conflict Detection: Cannot approve if another approved/active booking overlaps.
         """
         booking = db.session.get(Booking, booking_id)
         if not booking:
@@ -816,7 +878,7 @@ def create_app(test_config=None):
         if conflict:
             flash(
                 f"Approval Blocked by Conflict: Resource '{booking.resource.name}' is already reserved "
-                f"for approved Booking #{conflict.id} ({conflict.user.name}) from "
+                f"for Booking #{conflict.id} ({conflict.user.name}) from "
                 f"{conflict.start_time.strftime('%Y-%m-%d %H:%M')} to {conflict.end_time.strftime('%Y-%m-%d %H:%M')}. "
                 f"Conflicting approved reservations are strictly prohibited.",
                 "danger"
@@ -836,6 +898,13 @@ def create_app(test_config=None):
             booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
             booking.decided_by_id = current_user.id
             booking.rejection_reason = None
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'approved',
+                f"Booking approved by {current_user.name}",
+                f"Approved reservation from {booking.start_time.strftime('%Y-%m-%d %H:%M')} to {booking.end_time.strftime('%Y-%m-%d %H:%M')}."
+            )
             db.session.commit()
             flash(
                 f"Booking #{booking.id} for '{booking.resource.name}' requested by {booking.user.name} has been approved!",
@@ -885,6 +954,13 @@ def create_app(test_config=None):
             booking.rejection_reason = reason
             booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
             booking.decided_by_id = current_user.id
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'rejected',
+                f"Booking rejected by {current_user.name}",
+                f"Rejection reason: {reason}"
+            )
             db.session.commit()
             flash(
                 f"Booking #{booking.id} has been rejected. The explanation has been recorded for the student.",
@@ -895,6 +971,329 @@ def create_app(test_config=None):
             flash("An unexpected error occurred while rejecting the booking.", "danger")
 
         return redirect(url_for('manager_bookings'))
+
+    @app.route('/bookings/<int:booking_id>/check-in', methods=['POST'])
+    @login_required
+    def checkin_booking(booking_id):
+        """
+        Resource Check-In Action with Initial Condition Report.
+        Only resource owner manager or admin can check in an approved booking.
+        Validates:
+        1. Authorization: Only owner manager or admin.
+        2. Status: Booking MUST be in 'approved' status.
+           Unapproved (pending, rejected, cancelled, returned, already checked_in) bookings are rejected.
+        3. Initial Condition Report: condition_rating and notes are required.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if not booking.can_be_managed_by(current_user):
+            flash("Access denied: Only authorized managers can execute check-in.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        if booking.status != 'approved':
+            flash(
+                f"Cannot check in: Booking #{booking.id} is currently in '{booking.status_title}' status. "
+                f"Only 'Approved' bookings can be checked in.",
+                "danger"
+            )
+            return redirect(url_for('booking_detail', booking_id=booking.id)), 400
+
+        condition_rating = request.form.get('condition_rating', '').strip().lower()
+        notes = request.form.get('notes', '').strip()
+
+        errors = []
+        if condition_rating not in VALID_CONDITION_RATINGS:
+            errors.append(f"Please select a valid initial condition rating ({', '.join(VALID_CONDITION_RATINGS)}).")
+        if not notes or len(notes) < 5:
+            errors.append("Condition inspection notes (at least 5 characters) are required for check-in.")
+
+        if errors:
+            for err in errors:
+                flash(err, "danger")
+            return redirect(url_for('booking_detail', booking_id=booking.id)), 400
+
+        try:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            booking.status = 'checked_in'
+            booking.checked_in_at = now
+            booking.checked_out_at = now
+
+            # Create initial ConditionReport
+            report = ConditionReport(
+                booking_id=booking.id,
+                resource_id=booking.resource_id,
+                reporter_id=current_user.id,
+                report_stage='check_in',
+                condition_rating=condition_rating,
+                notes=notes
+            )
+            db.session.add(report)
+
+            # Audit event
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'checked_in',
+                f"Resource checked in / loan activated by {current_user.name}",
+                f"Handover rating: {condition_rating.replace('_', ' ').title()}. Notes: {notes}"
+            )
+            db.session.commit()
+            flash(
+                f"Resource '{booking.resource.name}' has been checked in! Active loan initiated for {booking.user.name}.",
+                "success"
+            )
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while checking in the booking.", "danger")
+
+        return redirect(url_for('booking_detail', booking_id=booking.id))
+
+    @app.route('/bookings/<int:booking_id>/request-return', methods=['POST'])
+    @login_required
+    def request_return_booking(booking_id):
+        """
+        Return Request Action.
+        Allowed by the borrower student or authorized manager.
+        Transitions status from 'checked_in' to 'return_pending'.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if booking.user_id != current_user.id and not booking.can_be_managed_by(current_user):
+            flash("Access denied: You are not authorized to request return for this booking.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        if booking.status != 'checked_in':
+            flash(
+                f"Cannot request return: Booking is currently '{booking.status_title}'. "
+                f"Return can only be initiated for 'Checked In (Active)' bookings.",
+                "warning"
+            )
+            return redirect(url_for('booking_detail', booking_id=booking.id)), 400
+
+        try:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            booking.status = 'return_pending'
+            booking.return_requested_at = now
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'return_requested',
+                f"Return handover requested by {current_user.name}",
+                "Borrower indicated the resource is ready for physical return inspection."
+            )
+            db.session.commit()
+            flash(
+                "Return handover requested! Please return the resource to the designated facility manager for final inspection.",
+                "info"
+            )
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while requesting return.", "danger")
+
+        return redirect(url_for('booking_detail', booking_id=booking.id))
+
+    @app.route('/bookings/<int:booking_id>/return', methods=['POST'])
+    @login_required
+    def return_booking(booking_id):
+        """
+        Manager Return Inspection & Completion Action.
+        Only authorized manager or admin can complete return.
+        Allowed only for bookings in 'checked_in' or 'return_pending' status.
+        Records the final check-out condition report and audit log.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if not booking.can_be_managed_by(current_user):
+            flash("Access denied: Only authorized managers can complete returns.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        if booking.status not in ('checked_in', 'return_pending'):
+            flash(
+                f"Cannot complete return: Booking is currently in '{booking.status_title}' status. "
+                f"Only active or return-pending bookings can be returned.",
+                "danger"
+            )
+            return redirect(url_for('booking_detail', booking_id=booking.id)), 400
+
+        condition_rating = request.form.get('condition_rating', '').strip().lower()
+        notes = request.form.get('notes', '').strip()
+
+        errors = []
+        if condition_rating not in VALID_CONDITION_RATINGS:
+            errors.append(f"Please select a valid return condition rating ({', '.join(VALID_CONDITION_RATINGS)}).")
+        if not notes or len(notes) < 5:
+            errors.append("Return inspection notes (at least 5 characters) are required.")
+
+        if errors:
+            for err in errors:
+                flash(err, "danger")
+            return redirect(url_for('booking_detail', booking_id=booking.id)), 400
+
+        try:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            booking.status = 'returned'
+            booking.returned_at = now
+
+            # Create final check-out ConditionReport
+            report = ConditionReport(
+                booking_id=booking.id,
+                resource_id=booking.resource_id,
+                reporter_id=current_user.id,
+                report_stage='check_out',
+                condition_rating=condition_rating,
+                notes=notes
+            )
+            db.session.add(report)
+
+            # Audit event
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'returned',
+                f"Return inspection completed by {current_user.name}",
+                f"Final return condition: {condition_rating.replace('_', ' ').title()}. Notes: {notes}"
+            )
+            db.session.commit()
+            flash(
+                f"Resource return completed and verified for '{booking.resource.name}'. Booking #{booking.id} is officially closed.",
+                "success"
+            )
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while completing the return.", "danger")
+
+        return redirect(url_for('booking_detail', booking_id=booking.id))
+
+    @app.route('/bookings/<int:booking_id>/incidents', methods=['POST'])
+    @login_required
+    def report_incident(booking_id):
+        """
+        Incident Reporting Action.
+        Allowed for the borrower, resource owner manager, or admin.
+        Categories: equipment_damage, missing_accessory, late_return, safety_concern, malfunction, other.
+        Creates an incident in 'open' status.
+        Does NOT automatically assign blame or impose penalties.
+        """
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash(f"Booking #{booking_id} not found.", "danger")
+            abort(404)
+
+        if not booking.can_be_viewed_by(current_user):
+            flash("Access denied: You cannot submit an incident report for an unrelated booking.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        category = request.form.get('category', '').strip().lower()
+        severity = request.form.get('severity', 'medium').strip().lower()
+        description = request.form.get('description', '').strip()
+
+        errors = []
+        if category not in VALID_INCIDENT_CATEGORIES:
+            errors.append("Please select a valid incident category.")
+        if severity not in VALID_INCIDENT_SEVERITIES:
+            severity = 'medium'
+        if not description or len(description) < 10:
+            errors.append("Please provide a descriptive incident summary of at least 10 characters.")
+
+        if errors:
+            for err in errors:
+                flash(err, "danger")
+            return redirect(url_for('booking_detail', booking_id=booking.id)), 400
+
+        try:
+            incident = Incident(
+                booking_id=booking.id,
+                resource_id=booking.resource_id,
+                reporter_id=current_user.id,
+                category=category,
+                severity=severity,
+                description=description,
+                status='open'
+            )
+            db.session.add(incident)
+            db.session.flush()
+
+            log_booking_event(
+                booking.id,
+                current_user.id,
+                'incident_reported',
+                f"Incident #{incident.id} reported by {current_user.name} ({incident.category_title})",
+                f"Severity: {severity.title()}. Description: {description}"
+            )
+            db.session.commit()
+            flash(
+                f"Incident report #{incident.id} submitted. Facility managers have been alerted for impartial review.",
+                "warning"
+            )
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while saving the incident report.", "danger")
+
+        return redirect(url_for('booking_detail', booking_id=booking.id))
+
+    @app.route('/incidents/<int:incident_id>/resolve', methods=['POST'])
+    @login_required
+    def resolve_incident(incident_id):
+        """
+        Manager / Admin Incident Resolution & Status Update.
+        Security requirement:
+        - Students CANNOT resolve incidents (even their own).
+        - Only resource owner manager or admin can update status and record resolution note.
+        """
+        incident = db.session.get(Incident, incident_id)
+        if not incident:
+            flash(f"Incident #{incident_id} not found.", "danger")
+            abort(404)
+
+        if not incident.can_be_managed_by(current_user):
+            flash("Access denied: Only authorized resource managers or administrators can resolve incidents.", "danger")
+            return redirect(url_for('dashboard')), 403
+
+        status = request.form.get('status', 'resolved').strip().lower()
+        resolution_notes = request.form.get('resolution_notes', '').strip()
+
+        errors = []
+        if status not in VALID_INCIDENT_STATUSES:
+            errors.append("Invalid incident status.")
+        if status == 'resolved' and (not resolution_notes or len(resolution_notes) < 5):
+            errors.append("Resolution notes (at least 5 characters) are required when resolving an incident.")
+
+        if errors:
+            for err in errors:
+                flash(err, "danger")
+            return redirect(url_for('booking_detail', booking_id=incident.booking_id)), 400
+
+        try:
+            incident.status = status
+            incident.resolution_notes = resolution_notes
+            if status == 'resolved':
+                incident.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                incident.resolved_by_id = current_user.id
+
+            event_type = 'incident_resolved' if status == 'resolved' else 'incident_updated'
+            log_booking_event(
+                incident.booking_id,
+                current_user.id,
+                event_type,
+                f"Incident #{incident.id} status updated to '{incident.status_title}' by {current_user.name}",
+                f"Resolution notes: {resolution_notes}" if resolution_notes else None
+            )
+            db.session.commit()
+            flash(f"Incident #{incident.id} has been updated to '{incident.status_title}'.", "success")
+        except Exception:
+            db.session.rollback()
+            flash("An unexpected error occurred while updating the incident.", "danger")
+
+        return redirect(url_for('booking_detail', booking_id=incident.booking_id))
 
     # --------------------------------------------------------------------------
     # Role-Aware Dashboard & Protected Routes
@@ -1186,7 +1585,8 @@ def seed_demo_resources(app):
 def seed_demo_bookings(app):
     """
     Populates database with initial demonstration booking requests
-    to showcase student reservation history and manager review queues.
+    to showcase student reservation history, manager review queues,
+    check-in condition reporting, return inspections, and incident reviews.
     """
     with app.app_context():
         db.create_all()
@@ -1203,64 +1603,227 @@ def seed_demo_bookings(app):
         seminar_room = Resource.query.filter_by(name='Collaborative Innovation Seminar Suite 204').first()
         microscope = Resource.query.filter_by(name='Photonics & Optical Microscopy Suite').first()
         camera = Resource.query.filter_by(name='Sony FX3 Cinema Rig & Ronin Stabilizer Kit').first()
+        studio = Resource.query.filter_by(name='Acoustic Recording & Podcast Studio C').first()
 
-        if not seminar_room or not microscope or not camera:
+        if not seminar_room or not microscope or not camera or not studio:
             seed_demo_resources(app)
             seminar_room = Resource.query.filter_by(name='Collaborative Innovation Seminar Suite 204').first()
             microscope = Resource.query.filter_by(name='Photonics & Optical Microscopy Suite').first()
             camera = Resource.query.filter_by(name='Sony FX3 Cinema Rig & Ronin Stabilizer Kit').first()
+            studio = Resource.query.filter_by(name='Acoustic Recording & Podcast Studio C').first()
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        demo_bookings = [
-            {
-                'resource_id': seminar_room.id,
-                'user_id': student.id,
-                'start_time': now + timedelta(days=1, hours=2),
-                'end_time': now + timedelta(days=1, hours=5),
-                'purpose': 'ACM Student Chapter Hackathon Coordination and UI sprint planning.',
-                'status': 'approved',
-                'decided_by_id': admin.id,
-                'decided_at': now - timedelta(hours=3)
-            },
-            {
-                'resource_id': microscope.id,
-                'user_id': student.id,
-                'start_time': now + timedelta(days=2, hours=4),
-                'end_time': now + timedelta(days=2, hours=7),
-                'purpose': 'Characterization of thin-film photovoltaic prototypes under faculty mentor Dr. Vance.',
-                'status': 'pending'
-            },
-            {
-                'resource_id': camera.id,
-                'user_id': student.id,
-                'start_time': now + timedelta(days=3, hours=1),
-                'end_time': now + timedelta(days=3, hours=9),
-                'purpose': 'Documentary interview filming for university robotics showcase.',
-                'status': 'pending'
-            }
-        ]
-
         count = 0
-        for data in demo_bookings:
-            existing = Booking.query.filter_by(
-                resource_id=data['resource_id'],
-                user_id=data['user_id'],
-                purpose=data['purpose']
-            ).first()
-            if not existing:
-                b = Booking(
-                    resource_id=data['resource_id'],
-                    user_id=data['user_id'],
-                    start_time=data['start_time'],
-                    end_time=data['end_time'],
-                    purpose=data['purpose'],
-                    status=data['status']
-                )
-                if 'decided_by_id' in data:
-                    b.decided_by_id = data['decided_by_id']
-                    b.decided_at = data.get('decided_at')
-                db.session.add(b)
-                count += 1
+
+        # Scenario 1: Approved Booking ready for Check-In
+        b1 = Booking.query.filter_by(resource_id=seminar_room.id, user_id=student.id).first()
+        if not b1:
+            b1 = Booking(
+                resource_id=seminar_room.id,
+                user_id=student.id,
+                start_time=now + timedelta(days=1, hours=2),
+                end_time=now + timedelta(days=1, hours=5),
+                purpose='ACM Student Chapter Hackathon Coordination and UI sprint planning.',
+                status='approved'
+            )
+            b1.decided_by_id = admin.id
+            b1.decided_at = now - timedelta(hours=3)
+            db.session.add(b1)
+            db.session.flush()
+
+            log_booking_event(
+                b1.id, student.id, 'requested',
+                f"Booking requested by {student.name}",
+                f"Requested interval: {b1.start_time.strftime('%Y-%m-%d %H:%M')} to {b1.end_time.strftime('%Y-%m-%d %H:%M')}."
+            )
+            log_booking_event(
+                b1.id, admin.id, 'approved',
+                f"Booking approved by {admin.name}",
+                "Authorized reservation for collaborative project meeting."
+            )
+            count += 1
+
+        # Scenario 2: Active Checked-In Loan with Initial Condition Report & Incident
+        b2 = Booking.query.filter_by(resource_id=camera.id, user_id=student.id).first()
+        if not b2:
+            b2 = Booking(
+                resource_id=camera.id,
+                user_id=student.id,
+                start_time=now - timedelta(hours=4),
+                end_time=now + timedelta(hours=20),
+                purpose='Documentary interview filming for university robotics showcase.',
+                status='checked_in'
+            )
+            b2.decided_by_id = manager.id
+            b2.decided_at = now - timedelta(hours=5)
+            b2.checked_in_at = now - timedelta(hours=4)
+            b2.checked_out_at = now - timedelta(hours=4)
+            db.session.add(b2)
+            db.session.flush()
+
+            log_booking_event(
+                b2.id, student.id, 'requested',
+                f"Booking requested by {student.name}",
+                "Requested 24h field loan for robotics showcase documentary."
+            )
+            log_booking_event(
+                b2.id, manager.id, 'approved',
+                f"Booking approved by {manager.name}",
+                "Approved equipment package with Pelican hard case."
+            )
+            log_booking_event(
+                b2.id, manager.id, 'checked_in',
+                f"Resource checked in / loan activated by {manager.name}",
+                "Handover rating: Excellent. Both batteries charged to 100%, lens glass immaculate."
+            )
+
+            # Initial Condition Report
+            cr1 = ConditionReport(
+                booking_id=b2.id,
+                resource_id=camera.id,
+                reporter_id=manager.id,
+                report_stage='check_in',
+                condition_rating='excellent',
+                notes='Full kit verified. Sensor clean, gimbal calibrated, CFexpress cards formatted.'
+            )
+            db.session.add(cr1)
+
+            # Incident on active loan
+            inc1 = Incident(
+                booking_id=b2.id,
+                resource_id=camera.id,
+                reporter_id=student.id,
+                category='missing_accessory',
+                severity='low',
+                description='Missing 65W USB-C PD fast charger from secondary mesh pocket.',
+                status='under_review'
+            )
+            db.session.add(inc1)
+            db.session.flush()
+
+            log_booking_event(
+                b2.id, student.id, 'incident_reported',
+                f"Incident #{inc1.id} reported by {student.name} ({inc1.category_title})",
+                "Severity: Low. Description: Missing 65W USB-C PD fast charger from secondary mesh pocket."
+            )
+            count += 1
+
+        # Scenario 3: Return Pending Booking
+        b3 = Booking.query.filter_by(resource_id=microscope.id, user_id=student.id).first()
+        if not b3:
+            b3 = Booking(
+                resource_id=microscope.id,
+                user_id=student.id,
+                start_time=now - timedelta(hours=6),
+                end_time=now + timedelta(hours=1),
+                purpose='Characterization of thin-film photovoltaic prototypes under faculty mentor Dr. Vance.',
+                status='return_pending'
+            )
+            b3.decided_by_id = manager.id
+            b3.decided_at = now - timedelta(hours=7)
+            b3.checked_in_at = now - timedelta(hours=6)
+            b3.checked_out_at = now - timedelta(hours=6)
+            b3.return_requested_at = now - timedelta(minutes=30)
+            db.session.add(b3)
+            db.session.flush()
+
+            log_booking_event(
+                b3.id, student.id, 'requested',
+                f"Booking requested by {student.name}",
+                "Requested cleanroom microscopy session."
+            )
+            log_booking_event(
+                b3.id, manager.id, 'approved',
+                f"Booking approved by {manager.name}",
+                "Faculty endorsement verified."
+            )
+            log_booking_event(
+                b3.id, manager.id, 'checked_in',
+                f"Cleanroom access granted by {manager.name}",
+                "Laser interlock verified operational."
+            )
+            cr_micro = ConditionReport(
+                booking_id=b3.id,
+                resource_id=microscope.id,
+                reporter_id=manager.id,
+                report_stage='check_in',
+                condition_rating='good',
+                notes='Objective lenses cleaned with lens paper. Immersion oil dispenser replenished.'
+            )
+            db.session.add(cr_micro)
+            log_booking_event(
+                b3.id, student.id, 'return_requested',
+                f"Return handover requested by {student.name}",
+                "Borrower completed sample scanning and wiped slide stage."
+            )
+            count += 1
+
+        # Scenario 4: Fully Completed & Returned Booking with Both Condition Reports & Resolved Incident
+        b4 = Booking.query.filter_by(resource_id=studio.id, user_id=student.id).first()
+        if not b4:
+            b4 = Booking(
+                resource_id=studio.id,
+                user_id=student.id,
+                start_time=now - timedelta(days=2, hours=3),
+                end_time=now - timedelta(days=2),
+                purpose='Audio engineering capstone podcast recording session.',
+                status='returned'
+            )
+            b4.decided_by_id = manager.id
+            b4.decided_at = now - timedelta(days=2, hours=4)
+            b4.checked_in_at = now - timedelta(days=2, hours=3)
+            b4.checked_out_at = now - timedelta(days=2, hours=3)
+            b4.returned_at = now - timedelta(days=2)
+            db.session.add(b4)
+            db.session.flush()
+
+            log_booking_event(b4.id, student.id, 'requested', f"Booking requested by {student.name}", "3-hour acoustic studio booking.")
+            log_booking_event(b4.id, manager.id, 'approved', f"Booking approved by {manager.name}", "Studio slot confirmed.")
+            log_booking_event(b4.id, manager.id, 'checked_in', f"Studio opened by {manager.name}", "Initial rating: Excellent.")
+
+            # Initial Report
+            cr_s_in = ConditionReport(
+                booking_id=b4.id,
+                resource_id=studio.id,
+                reporter_id=manager.id,
+                report_stage='check_in',
+                condition_rating='excellent',
+                notes='All 4 Shure SM7B mics operational. Mixer faders zeroed.'
+            )
+            db.session.add(cr_s_in)
+
+            # Final Report
+            cr_s_out = ConditionReport(
+                booking_id=b4.id,
+                resource_id=studio.id,
+                reporter_id=manager.id,
+                report_stage='check_out',
+                condition_rating='good',
+                notes='Room left clean and locked. Mic 3 boom friction clutch loosened.'
+            )
+            db.session.add(cr_s_out)
+
+            # Resolved Incident
+            inc2 = Incident(
+                booking_id=b4.id,
+                resource_id=studio.id,
+                reporter_id=student.id,
+                category='malfunction',
+                severity='medium',
+                description='Microphone stand 3 boom arm clutch slipping under heavy shockmount.',
+                status='resolved',
+                resolution_notes='Tightened clutch locking nut and tested with 2kg counterweight. Operating normally.',
+                resolved_by_id=manager.id,
+                resolved_at=now - timedelta(days=1, hours=20)
+            )
+            db.session.add(inc2)
+            db.session.flush()
+
+            log_booking_event(b4.id, student.id, 'incident_reported', f"Incident #{inc2.id} reported by {student.name}", "Boom arm clutch slipping.")
+            log_booking_event(b4.id, manager.id, 'incident_resolved', f"Incident #{inc2.id} resolved by {manager.name}", "Clutch nut tightened and tested.")
+            log_booking_event(b4.id, manager.id, 'returned', f"Return inspection completed by {manager.name}", "Studio returned in good order.")
+            count += 1
+
         db.session.commit()
     return count
 
