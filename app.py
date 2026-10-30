@@ -82,12 +82,24 @@ def create_app(test_config=None):
     os.makedirs(app.instance_path, exist_ok=True)
     default_db_path = os.path.join(app.instance_path, 'resourcebridge.db')
 
-    # Default configuration
+    # Secure secret key resolution and configuration
+    env_mode = os.environ.get('FLASK_ENV', 'development').lower()
+    secret_key = os.environ.get('SECRET_KEY')
+    if not secret_key:
+        if env_mode == 'production':
+            raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable must be set in production mode.")
+        secret_key = 'dev-hackathon-insecure-secret-key-change-in-prod'
+
+    # Default configuration with hardened session cookies
     app.config.from_mapping(
-        SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-hackathon-insecure-secret-key-change-in-prod'),
+        SECRET_KEY=secret_key,
         SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL', f"sqlite:///{default_db_path}"),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        WTF_CSRF_ENABLED=True
+        WTF_CSRF_ENABLED=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1'),
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=8)
     )
 
     # Override configuration for testing if provided
@@ -96,6 +108,15 @@ def create_app(test_config=None):
 
     # Initialize extensions
     db.init_app(app)
+
+    @app.after_request
+    def set_security_headers(response):
+        """Inject defense-in-depth HTTP security headers on all responses."""
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        return response
 
     login_manager = LoginManager()
     login_manager.init_app(app)
@@ -160,8 +181,16 @@ def create_app(test_config=None):
                 return
             token = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
             if not token or token != session.get('_csrf_token'):
+                if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return {'error': 'Invalid or missing CSRF token.'}, 400
                 flash("Security alert: Form session expired or invalid CSRF token. Please submit again.", "danger")
-                return redirect(request.referrer or url_for('index'))
+                referrer = request.referrer
+                # Open redirect protection: strictly allow only same-origin or relative paths
+                if referrer and (referrer.startswith(request.host_url) or referrer.startswith('/')):
+                    target = referrer
+                else:
+                    target = url_for('index')
+                return redirect(target)
 
     # --------------------------------------------------------------------------
     # Public & Landing Routes
@@ -673,6 +702,16 @@ def create_app(test_config=None):
             return render_template('resources/detail.html', resource=resource), 400
 
         try:
+            # Pre-commit recheck: prevents race condition if slot was approved while user was submitting
+            recheck_conflict = check_booking_conflict(resource.id, start_time, end_time)
+            if recheck_conflict:
+                flash(
+                    f"Scheduling conflict: This resource was recently approved for another reservation from "
+                    f"{recheck_conflict.start_time.strftime('%Y-%m-%d %H:%M')} to {recheck_conflict.end_time.strftime('%Y-%m-%d %H:%M')}.",
+                    "danger"
+                )
+                return render_template('resources/detail.html', resource=resource), 400
+
             booking = Booking(
                 resource_id=resource.id,
                 user_id=current_user.id,
@@ -923,6 +962,20 @@ def create_app(test_config=None):
             ), 409
 
         try:
+            # Atomic pre-commit recheck: prevents double-booking if another manager approved an overlapping slot concurrently
+            concurrent_conflict = check_booking_conflict(
+                booking.resource_id,
+                booking.start_time,
+                booking.end_time,
+                exclude_booking_id=booking.id
+            )
+            if concurrent_conflict:
+                flash(
+                    f"Concurrency conflict: Resource '{booking.resource.name}' was approved concurrently for Booking #{concurrent_conflict.id}. Approval blocked.",
+                    "danger"
+                )
+                return redirect(url_for('manager_bookings')), 409
+
             booking.status = 'approved'
             booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
             booking.decided_by_id = current_user.id
@@ -1384,13 +1437,24 @@ def create_app(test_config=None):
         return render_template('dashboard.html', user=current_user, stats=db_stats)
 
     # --------------------------------------------------------------------------
-    # 404 Error Handler
+    # Centralized HTTP Error Handlers (403, 404, 500)
     # --------------------------------------------------------------------------
+
+    @app.errorhandler(403)
+    def access_forbidden(e):
+        """Safe 403 Forbidden handler preventing unauthorized actions."""
+        return render_template('403.html'), 403
 
     @app.errorhandler(404)
     def page_not_found(e):
         """Graceful, safe 404 handler for invalid resource IDs and broken links."""
         return render_template('404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(e):
+        """Safe 500 handler preventing stack trace or internal detail exposure."""
+        db.session.rollback()
+        return render_template('500.html'), 500
 
     # --------------------------------------------------------------------------
     # CLI Commands for Database Management & Demo Seeding
@@ -1874,4 +1938,8 @@ if __name__ == '__main__':
             seed_demo_resources(app)
         if Booking.query.count() == 0:
             seed_demo_bookings(app)
-    app.run(debug=True, port=5000)
+    # Secure debug mode detection: defaults to True in local dev, False in production
+    env_mode = os.environ.get('FLASK_ENV', 'development').lower()
+    debug_mode = os.environ.get('FLASK_DEBUG', 'true' if env_mode != 'production' else 'false').lower() in ('true', '1')
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=debug_mode, port=port)

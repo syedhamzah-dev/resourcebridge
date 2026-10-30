@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Server Error (500) - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="container py-6 text-center">
+    <div class="empty-state-card">
+        <div class="empty-icon" style="font-size: 3rem;">⚠️</div>
+        <h1 class="page-title mt-2">Temporary System Error (500)</h1>
+        <p class="text-muted max-w-500 mx-auto mt-2">
+            An unexpected error occurred while processing your request. Any active database transactions have been safely rolled back to preserve system consistency. No private information was exposed.
+        </p>
+        <div class="mt-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary" id="btn-500-dashboard">
+                Return to Dashboard
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline ml-2">
+                Home Page
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

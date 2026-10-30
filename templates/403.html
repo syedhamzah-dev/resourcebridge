@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Access Restricted (403) - ResourceBridge{% endblock %}
+
+{% block content %}
+<div class="container py-6 text-center">
+    <div class="empty-state-card">
+        <div class="empty-icon" style="font-size: 3rem;">🛡️</div>
+        <h1 class="page-title mt-2">Access Restricted (403)</h1>
+        <p class="text-muted max-w-500 mx-auto mt-2">
+            You do not have the required permissions or departmental role to access this area, manage this reservation, or perform this administrative action.
+        </p>
+        <div class="mt-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary" id="btn-403-dashboard">
+                Return to Dashboard
+            </a>
+            <a href="{{ url_for('resources_list') }}" class="btn btn-outline ml-2">
+                Browse Campus Catalogue
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
