@@ -9,6 +9,8 @@ database initialization, and seeding of demo accounts & resources.
 
 import os
 import secrets
+import threading
+from urllib.parse import urlsplit
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import (
@@ -72,6 +74,27 @@ def role_required(*allowed_roles):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+
+# Module-level thread lock for serializing critical state transitions (e.g. booking approvals)
+approval_lock = threading.Lock()
+
+
+def is_safe_redirect_url(target):
+    """
+    Validate that a redirect target is strictly an internal, relative URL
+    and not an open redirect vulnerability (e.g. //evil.com, https://evil.com, /\\evil.com).
+    """
+    if not target or not isinstance(target, str):
+        return False
+    # Ensure it starts with '/' but not '//' or '/\'
+    if not target.startswith('/') or target.startswith('//') or target.startswith('/\\'):
+        return False
+    try:
+        parsed = urlsplit(target)
+        return parsed.scheme == '' and parsed.netloc == ''
+    except Exception:
+        return False
 
 
 def create_app(test_config=None):
@@ -185,8 +208,8 @@ def create_app(test_config=None):
                     return {'error': 'Invalid or missing CSRF token.'}, 400
                 flash("Security alert: Form session expired or invalid CSRF token. Please submit again.", "danger")
                 referrer = request.referrer
-                # Open redirect protection: strictly allow only same-origin or relative paths
-                if referrer and (referrer.startswith(request.host_url) or referrer.startswith('/')):
+                # Open redirect protection: strictly allow only same-origin or safe relative paths
+                if referrer and (referrer.startswith(request.host_url) or is_safe_redirect_url(referrer)):
                     target = referrer
                 else:
                     target = url_for('index')
@@ -300,9 +323,9 @@ def create_app(test_config=None):
             login_user(user, remember=remember)
             flash(f"Welcome back, {user.name}! Signed in as {user.role_title}.", "success")
 
-            # Safe redirection to target page if specified
+            # Safe redirection to target page if specified (open redirect defense)
             next_page = request.args.get('next')
-            if not next_page or not next_page.startswith('/'):
+            if not is_safe_redirect_url(next_page):
                 next_page = url_for('dashboard')
             return redirect(next_page)
 
@@ -937,64 +960,75 @@ def create_app(test_config=None):
             )
             return redirect(url_for('manager_bookings')), 400
 
-        conflict = check_booking_conflict(
-            booking.resource_id,
-            booking.start_time,
-            booking.end_time,
-            exclude_booking_id=booking.id
-        )
-        if conflict:
-            flash(
-                f"Approval Blocked by Conflict: Resource '{booking.resource.name}' is already reserved "
-                f"for Booking #{conflict.id} ({conflict.user.name}) from "
-                f"{conflict.start_time.strftime('%Y-%m-%d %H:%M')} to {conflict.end_time.strftime('%Y-%m-%d %H:%M')}. "
-                f"Conflicting approved reservations are strictly prohibited.",
-                "danger"
-            )
-            query = Booking.query if current_user.is_admin else Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
-            bookings = query.order_by(db.case((Booking.status == 'pending', 0), else_=1), Booking.start_time.asc()).all()
-            conflicts_map = get_pending_conflicts_map(bookings)
-            return render_template(
-                'bookings/manager_list.html',
-                bookings=bookings,
-                conflicts_map=conflicts_map,
-                status_filter='all'
-            ), 409
+        with approval_lock:
+            # Ensure latest database state under serialized thread lock
+            try:
+                db.session.refresh(booking)
+            except Exception:
+                pass
 
-        try:
-            # Atomic pre-commit recheck: prevents double-booking if another manager approved an overlapping slot concurrently
-            concurrent_conflict = check_booking_conflict(
+            if booking.status != 'pending':
+                flash(f"Booking #{booking.id} is already in '{booking.status_title}' status.", "warning")
+                return redirect(url_for('manager_bookings'))
+
+            conflict = check_booking_conflict(
                 booking.resource_id,
                 booking.start_time,
                 booking.end_time,
                 exclude_booking_id=booking.id
             )
-            if concurrent_conflict:
+            if conflict:
                 flash(
-                    f"Concurrency conflict: Resource '{booking.resource.name}' was approved concurrently for Booking #{concurrent_conflict.id}. Approval blocked.",
+                    f"Approval Blocked by Conflict: Resource '{booking.resource.name}' is already reserved "
+                    f"for Booking #{conflict.id} ({conflict.user.name}) from "
+                    f"{conflict.start_time.strftime('%Y-%m-%d %H:%M')} to {conflict.end_time.strftime('%Y-%m-%d %H:%M')}. "
+                    f"Conflicting approved reservations are strictly prohibited.",
                     "danger"
                 )
-                return redirect(url_for('manager_bookings')), 409
+                query = Booking.query if current_user.is_admin else Booking.query.join(Resource).filter(Resource.owner_id == current_user.id)
+                bookings = query.order_by(db.case((Booking.status == 'pending', 0), else_=1), Booking.start_time.asc()).all()
+                conflicts_map = get_pending_conflicts_map(bookings)
+                return render_template(
+                    'bookings/manager_list.html',
+                    bookings=bookings,
+                    conflicts_map=conflicts_map,
+                    status_filter='all'
+                ), 409
 
-            booking.status = 'approved'
-            booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            booking.decided_by_id = current_user.id
-            booking.rejection_reason = None
-            log_booking_event(
-                booking.id,
-                current_user.id,
-                'approved',
-                f"Booking approved by {current_user.name}",
-                f"Approved reservation from {booking.start_time.strftime('%Y-%m-%d %H:%M')} to {booking.end_time.strftime('%Y-%m-%d %H:%M')}."
-            )
-            db.session.commit()
-            flash(
-                f"Booking #{booking.id} for '{booking.resource.name}' requested by {booking.user.name} has been approved!",
-                "success"
-            )
-        except Exception:
-            db.session.rollback()
-            flash("An unexpected error occurred while approving the booking.", "danger")
+            try:
+                # Atomic pre-commit recheck: prevents double-booking if another manager approved an overlapping slot concurrently
+                concurrent_conflict = check_booking_conflict(
+                    booking.resource_id,
+                    booking.start_time,
+                    booking.end_time,
+                    exclude_booking_id=booking.id
+                )
+                if concurrent_conflict:
+                    flash(
+                        f"Concurrency conflict: Resource '{booking.resource.name}' was approved concurrently for Booking #{concurrent_conflict.id}. Approval blocked.",
+                        "danger"
+                    )
+                    return redirect(url_for('manager_bookings')), 409
+
+                booking.status = 'approved'
+                booking.decided_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                booking.decided_by_id = current_user.id
+                booking.rejection_reason = None
+                log_booking_event(
+                    booking.id,
+                    current_user.id,
+                    'approved',
+                    f"Booking approved by {current_user.name}",
+                    f"Approved reservation from {booking.start_time.strftime('%Y-%m-%d %H:%M')} to {booking.end_time.strftime('%Y-%m-%d %H:%M')}."
+                )
+                db.session.commit()
+                flash(
+                    f"Booking #{booking.id} for '{booking.resource.name}' requested by {booking.user.name} has been approved!",
+                    "success"
+                )
+            except Exception:
+                db.session.rollback()
+                flash("An unexpected error occurred while approving the booking.", "danger")
 
         return redirect(url_for('manager_bookings'))
 

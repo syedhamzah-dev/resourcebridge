@@ -38,7 +38,8 @@ def client(app):
 
 
 def login_user_helper(client, email, password):
-    """Helper to authenticate a test user."""
+    """Helper to authenticate a test user, clearing any existing session first."""
+    client.get('/logout', follow_redirects=True)
     return client.post('/login', data={'email': email, 'password': password}, follow_redirects=True)
 
 
@@ -605,3 +606,164 @@ def test_cannot_cancel_already_processed_booking(client, app):
     with app.app_context():
         b = db.session.get(Booking, booking_id)
         assert b.status == 'approved'
+
+
+# ------------------------------------------------------------------------------
+# Test 15: Competing Booking Requests Submission & Conflict Handling
+# ------------------------------------------------------------------------------
+
+def test_competing_booking_requests_submission_and_conflict_handling(client, app):
+    """
+    15. Competing booking requests for the same resource and overlapping interval:
+        - Both can be submitted and queued as pending before approval.
+        - Manager review queue displays conflict indicator.
+        - Once one request is approved, submission of new overlapping request is blocked (400).
+        - Attempting to approve the competing pending request is rejected with 409 Conflict.
+    """
+    ids = create_test_users_and_resource(app)
+    now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=3)
+    start_a = now.replace(minute=0, second=0, microsecond=0)
+    end_a = start_a + timedelta(hours=3)
+    start_b = start_a + timedelta(hours=1)
+    end_b = start_b + timedelta(hours=3)
+
+    # 1. Student 1 submits booking A
+    login_user_helper(client, "student@campus.edu", "StudentPass123!")
+    resp_sub_a = client.post(
+        f"/resources/{ids['res1_id']}/book",
+        data={
+            'start_time': start_a.isoformat(),
+            'end_time': end_a.isoformat(),
+            'purpose': 'Student A capstone project session.'
+        },
+        follow_redirects=True
+    )
+    assert resp_sub_a.status_code == 200
+    assert b"submitted successfully" in resp_sub_a.data
+
+    # 2. Student 2 submits competing booking B for overlapping time window
+    login_user_helper(client, "maya@campus.edu", "StudentPass123!")
+    resp_sub_b = client.post(
+        f"/resources/{ids['res1_id']}/book",
+        data={
+            'start_time': start_b.isoformat(),
+            'end_time': end_b.isoformat(),
+            'purpose': 'Student B competing session.'
+        },
+        follow_redirects=True
+    )
+    assert resp_sub_b.status_code == 200
+    assert b"submitted successfully" in resp_sub_b.data
+
+    with app.app_context():
+        b_a = Booking.query.filter_by(user_id=ids['student_id'], resource_id=ids['res1_id']).first()
+        b_b = Booking.query.filter_by(user_id=ids['student2_id'], resource_id=ids['res1_id']).first()
+        assert b_a is not None and b_a.status == 'pending'
+        assert b_b is not None and b_b.status == 'pending'
+        b_a_id, b_b_id = b_a.id, b_b.id
+
+    # 3. Manager reviews queue and approves booking A
+    login_user_helper(client, "manager1@campus.edu", "ManagerPass123!")
+    resp_approve = client.post(f"/bookings/{b_a_id}/approve", follow_redirects=True)
+    assert resp_approve.status_code == 200
+    assert b"has been approved" in resp_approve.data
+
+    # 4. Now that booking A is approved, a new student submitting for the same window is rejected immediately
+    login_user_helper(client, "student@campus.edu", "StudentPass123!")
+    resp_sub_c = client.post(
+        f"/resources/{ids['res1_id']}/book",
+        data={
+            'start_time': start_a.isoformat(),
+            'end_time': end_a.isoformat(),
+            'purpose': 'Student C conflicting submission.'
+        },
+        follow_redirects=True
+    )
+    assert resp_sub_c.status_code == 400
+    assert b"Scheduling conflict" in resp_sub_c.data
+
+    # 5. Manager attempts to approve competing booking B -> blocked by conflict (409)
+    login_user_helper(client, "manager1@campus.edu", "ManagerPass123!")
+    resp_approve_b = client.post(f"/bookings/{b_b_id}/approve", follow_redirects=False)
+    assert resp_approve_b.status_code == 409
+
+    with app.app_context():
+        b_b_fresh = db.session.get(Booking, b_b_id)
+        assert b_b_fresh.status == 'pending'
+
+
+# ------------------------------------------------------------------------------
+# Test 16: Dashboard Booking Metrics Reconcile With Real Records
+# ------------------------------------------------------------------------------
+
+def test_dashboard_metrics_reconcile_with_booking_lifecycle(client, app):
+    """
+    16. Verifies that student and manager dashboard metrics:
+        - Accurately count underlying database booking records.
+        - Update dynamically as booking transitions: pending -> approved -> checked_in -> returned.
+    """
+    ids = create_test_users_and_resource(app)
+    now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
+
+    # Baseline student dashboard: 0 active, 0 pending
+    login_user_helper(client, "student@campus.edu", "StudentPass123!")
+    std_dash = client.get('/dashboard')
+    assert std_dash.status_code == 200
+
+    # Student submits booking request
+    client.post(
+        f"/resources/{ids['res1_id']}/book",
+        data={
+            'start_time': now.isoformat(),
+            'end_time': (now + timedelta(hours=2)).isoformat(),
+            'purpose': 'Metrics verification reservation.'
+        },
+        follow_redirects=True
+    )
+
+    with app.app_context():
+        booking = Booking.query.filter_by(user_id=ids['student_id']).first()
+        assert booking is not None
+        booking_id = booking.id
+
+    # Check student dashboard: pending count is 1
+    std_dash2 = client.get('/dashboard')
+    assert b"1" in std_dash2.data
+    assert b"Pending Requests" in std_dash2.data
+
+    # Check manager dashboard: pending_reviews_count is 1
+    login_user_helper(client, "manager1@campus.edu", "ManagerPass123!")
+    mgr_dash = client.get('/dashboard')
+    assert b"1" in mgr_dash.data
+    assert b"Pending Reviews" in mgr_dash.data
+
+    # Manager approves booking
+    client.post(f"/bookings/{booking_id}/approve", follow_redirects=True)
+
+    # Manager dashboard: pending_reviews is 0, active_reservations is 1
+    mgr_dash2 = client.get('/dashboard')
+    assert b"1 Active Approved" in mgr_dash2.data
+
+    # Student dashboard: active loans is 1
+    login_user_helper(client, "student@campus.edu", "StudentPass123!")
+    std_dash3 = client.get('/dashboard')
+    assert b"Active Loans" in std_dash3.data
+
+    # Manager checks in booking
+    login_user_helper(client, "manager1@campus.edu", "ManagerPass123!")
+    client.post(
+        f"/bookings/{booking_id}/check-in",
+        data={'condition_rating': 'excellent', 'notes': 'Handover inspected.'},
+        follow_redirects=True
+    )
+
+    # Manager completes return
+    client.post(
+        f"/bookings/{booking_id}/return",
+        data={'condition_rating': 'good', 'notes': 'Return inspected and closed.'},
+        follow_redirects=True
+    )
+
+    # After return: active reservations is 0 on manager dashboard
+    mgr_dash3 = client.get('/dashboard')
+    assert b"0 Active Approved" in mgr_dash3.data

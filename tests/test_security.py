@@ -10,6 +10,10 @@ Comprehensive verification of defense-in-depth controls for ResourceBridge:
 """
 
 import pytest
+import os
+import tempfile
+import threading
+import concurrent.futures
 from datetime import datetime, timezone, timedelta
 from app import create_app
 from models import db, User, Resource, Booking
@@ -107,6 +111,65 @@ def test_csrf_open_redirect_defense(sec_client):
     assert resp.headers['Location'].endswith('/') or '/login' in resp.headers['Location']
 
 
+def test_login_open_redirect_defense(sec_app, sec_client):
+    """Verify that user-supplied redirect destinations in login are strictly validated."""
+    with sec_app.app_context():
+        user = User("Redirect User", "redir@campus.edu", "Pass123!", role="student")
+        db.session.add(user)
+        db.session.commit()
+
+    with sec_client.session_transaction() as sess:
+        sess['_csrf_token'] = 'valid-token'
+
+    # 1. Scheme-relative URL attack (//evil.com)
+    resp1 = sec_client.post('/login?next=//evil.com', data={
+        'email': 'redir@campus.edu',
+        'password': 'Pass123!',
+        'csrf_token': 'valid-token'
+    }, follow_redirects=False)
+    assert resp1.status_code == 302
+    assert resp1.headers['Location'].endswith('/dashboard')
+    assert 'evil.com' not in resp1.headers['Location']
+    sec_client.get('/logout')
+
+    # 2. Windows/backslash path attack (/\\evil.com)
+    with sec_client.session_transaction() as sess:
+        sess['_csrf_token'] = 'valid-token'
+    resp2 = sec_client.post('/login?next=/\\\\evil.com', data={
+        'email': 'redir@campus.edu',
+        'password': 'Pass123!',
+        'csrf_token': 'valid-token'
+    }, follow_redirects=False)
+    assert resp2.status_code == 302
+    assert resp2.headers['Location'].endswith('/dashboard')
+    assert 'evil.com' not in resp2.headers['Location']
+    sec_client.get('/logout')
+
+    # 3. Absolute external URL attack (https://attacker.org)
+    with sec_client.session_transaction() as sess:
+        sess['_csrf_token'] = 'valid-token'
+    resp3 = sec_client.post('/login?next=https://attacker.org', data={
+        'email': 'redir@campus.edu',
+        'password': 'Pass123!',
+        'csrf_token': 'valid-token'
+    }, follow_redirects=False)
+    assert resp3.status_code == 302
+    assert resp3.headers['Location'].endswith('/dashboard')
+    assert 'attacker.org' not in resp3.headers['Location']
+    sec_client.get('/logout')
+
+    # 4. Legitimate relative internal URL (/resources)
+    with sec_client.session_transaction() as sess:
+        sess['_csrf_token'] = 'valid-token'
+    resp4 = sec_client.post('/login?next=/resources', data={
+        'email': 'redir@campus.edu',
+        'password': 'Pass123!',
+        'csrf_token': 'valid-token'
+    }, follow_redirects=False)
+    assert resp4.status_code == 302
+    assert resp4.headers['Location'].endswith('/resources')
+
+
 # ------------------------------------------------------------------------------
 # 3. Custom Error Handlers (403 Forbidden & 404 Not Found)
 # ------------------------------------------------------------------------------
@@ -155,6 +218,20 @@ def test_custom_404_error_handler_renders_safe_page(sec_client):
     assert resp.status_code == 404
     assert b"Resource Not Found" in resp.data
     assert b"404" in resp.data
+
+
+def test_custom_500_error_handler_renders_safe_page(sec_app, sec_client):
+    """Ensure 500 Internal Server Error rolls back transaction and renders safe page without leak."""
+    @sec_app.route('/test-500-trigger')
+    def trigger_500():
+        from flask import abort
+        abort(500)
+
+    resp = sec_client.get('/test-500-trigger')
+    assert resp.status_code == 500
+    assert b"Temporary System Error" in resp.data
+    assert b"500" in resp.data
+    assert b"Traceback" not in resp.data
 
 
 # ------------------------------------------------------------------------------
@@ -211,3 +288,74 @@ def test_concurrency_double_booking_rejection(sec_app, sec_client):
     with sec_app.app_context():
         b2_fresh = db.session.get(Booking, b2_id)
         assert b2_fresh.status == 'pending'  # Remains pending, NOT double-booked!
+
+
+def test_multithreaded_concurrent_double_booking_rejection():
+    """
+    Verify multi-threaded concurrent approval requests for overlapping slots cannot double-book.
+    Uses independent client worker threads and a threading.Barrier to simulate real race conditions.
+    """
+    temp_db = os.path.join(tempfile.gettempdir(), f'test_conc_{datetime.now().timestamp()}.db')
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{temp_db}',
+        'WTF_CSRF_ENABLED': False,
+        'SECRET_KEY': 'test-conc-secret'
+    })
+    try:
+        now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
+        start = now
+        end = now + timedelta(hours=3)
+
+        with app.app_context():
+            db.create_all()
+            mgr = User("Concur Mgr", "concur_mgr@campus.edu", "Pass123!", role="manager")
+            std1 = User("Student A", "stda@campus.edu", "Pass123!", role="student")
+            std2 = User("Student B", "stdb@campus.edu", "Pass123!", role="student")
+            db.session.add_all([mgr, std1, std2])
+            db.session.commit()
+
+            res = Resource("Electron Scope 2", "Optics", "Specialized Science & Optics", "Bay 2", "9-5", mgr.id)
+            db.session.add(res)
+            db.session.commit()
+
+            b1 = Booking(resource_id=res.id, user_id=std1.id, start_time=start, end_time=end, purpose="Thread Exp A", status='pending')
+            b2 = Booking(resource_id=res.id, user_id=std2.id, start_time=start, end_time=end, purpose="Thread Exp B", status='pending')
+            db.session.add_all([b1, b2])
+            db.session.commit()
+            b1_id, b2_id = b1.id, b2.id
+
+        barrier = threading.Barrier(2)
+        results = []
+
+        def worker(booking_id):
+            client = app.test_client()
+            client.post('/login', data={'email': 'concur_mgr@campus.edu', 'password': 'Pass123!'}, follow_redirects=False)
+            barrier.wait()
+            resp = client.post(f'/bookings/{booking_id}/approve', follow_redirects=False)
+            return booking_id, resp.status_code
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f1 = ex.submit(worker, b1_id)
+            f2 = ex.submit(worker, b2_id)
+            for f in concurrent.futures.as_completed([f1, f2]):
+                results.append(f.result())
+
+        status_codes = [r[1] for r in results]
+        # Exactly one must be 302 (success redirect) and the other must be 409 (conflict)
+        assert 302 in status_codes
+        assert 409 in status_codes
+
+        with app.app_context():
+            b1_fresh = db.session.get(Booking, b1_id)
+            b2_fresh = db.session.get(Booking, b2_id)
+            statuses = [b1_fresh.status, b2_fresh.status]
+            assert 'approved' in statuses
+            assert 'pending' in statuses
+            assert statuses.count('approved') == 1
+    finally:
+        if os.path.exists(temp_db):
+            try:
+                os.remove(temp_db)
+            except Exception:
+                pass
