@@ -113,15 +113,30 @@ def create_app(test_config=None):
             raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable must be set in production mode.")
         secret_key = 'dev-hackathon-insecure-secret-key-change-in-prod'
 
+    # Database URI resolution: support PostgreSQL and SQLite seamlessly
+    raw_db_url = os.environ.get('DATABASE_URL')
+    if raw_db_url and raw_db_url.startswith('postgres://'):
+        db_uri = raw_db_url.replace('postgres://', 'postgresql://', 1)
+    elif raw_db_url:
+        db_uri = raw_db_url
+    else:
+        db_uri = f"sqlite:///{default_db_path}"
+
+    is_prod = env_mode == 'production'
+    session_cookie_secure = os.environ.get(
+        'SESSION_COOKIE_SECURE',
+        'true' if is_prod else 'false'
+    ).lower() in ('true', '1')
+
     # Default configuration with hardened session cookies
     app.config.from_mapping(
         SECRET_KEY=secret_key,
-        SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL', f"sqlite:///{default_db_path}"),
+        SQLALCHEMY_DATABASE_URI=db_uri,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         WTF_CSRF_ENABLED=True,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
-        SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1'),
+        SESSION_COOKIE_SECURE=session_cookie_secure,
         PERMANENT_SESSION_LIFETIME=timedelta(hours=8)
     )
 
@@ -231,6 +246,23 @@ def create_app(test_config=None):
     def about():
         """About page detailing trust, safety, and accountability protocols."""
         return render_template('about.html')
+
+    @app.route('/health')
+    def health():
+        """Health check endpoint for cloud platform monitors, load balancers, and judges."""
+        db_status = "connected"
+        try:
+            db.session.execute(db.text('SELECT 1')).scalar()
+        except Exception as e:
+            db_status = f"unhealthy: {str(e)}"
+
+        status_code = 200 if db_status == "connected" else 503
+        return {
+            "status": "healthy" if db_status == "connected" else "degraded",
+            "app": "ResourceBridge",
+            "environment": env_mode,
+            "database": db_status
+        }, status_code
 
     # --------------------------------------------------------------------------
     # Authentication Routes

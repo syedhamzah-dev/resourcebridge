@@ -156,3 +156,14 @@ def test_redesigned_catalogue_and_detail_two_column(client, app):
     assert "Cinema Camera Handling Safety" in det_html
     assert "Registry Provenance" in det_html
     assert "sticky-panel" in det_html
+
+
+def test_health_check_endpoint(client):
+    """Verify that the health check endpoint returns 200 and valid JSON status."""
+    resp = client.get('/health')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data is not None
+    assert data['status'] == 'healthy'
+    assert data['app'] == 'ResourceBridge'
+    assert data['database'] == 'connected'

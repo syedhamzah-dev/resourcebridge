@@ -3,7 +3,7 @@
 > **Campus Resource Sharing Network with Trust, Safety, and Physical Accountability**
 > *A secure, full-stack college resource management platform built for hackathon demonstration.*
 
-[![Tests](https://img.shields.io/badge/tests-68%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-69%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Flask](https://img.shields.io/badge/flask-3.0%2B-black.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
@@ -206,7 +206,7 @@ Open your browser and navigate to:
 
 ## 🧪 8. Running the Automated Test Suite
 
-ResourceBridge includes an exhaustive regression and security test suite covering **68 test cases**:
+ResourceBridge includes an exhaustive regression and security test suite covering **69 test cases**:
 
 ```bash
 # Run all tests with verbose output
@@ -222,9 +222,9 @@ python -m pytest tests/test_auth.py -v
 ```
 
 ### Current Test Suite Summary
-- **Total Tests**: **68 passed** (0 failed, 0 skipped)
+- **Total Tests**: **69 passed** (0 failed, 0 skipped)
 - **Execution Runtime**: ~35 seconds
-- **Code Coverage Areas**: Authentication, role escalation defense, CSRF token verification, open redirect mitigation, session cookie parameters, HTTP defense headers, object-level privacy authorization, conflict detection, physical condition tracking, incident escalation, multi-threaded race conditions, and frontend redesign layout.
+- **Code Coverage Areas**: Authentication, role escalation defense, CSRF token verification, open redirect mitigation, session cookie parameters, HTTP defense headers, object-level privacy authorization, conflict detection, physical condition tracking, incident escalation, multi-threaded race conditions, and frontend redesign layout, and health monitoring endpoint (/health).
 
 ---
 
@@ -248,19 +248,79 @@ For local hackathon demonstrations, the database is pre-populated with three dis
 
 ### Production WSGI Server Configuration
 The repository includes standard production deployment artifacts:
-- `wsgi.py`: WSGI application callable (`app = create_app()`).
-- `Procfile`: Standard process definition for PaaS (`web: gunicorn wsgi:app`).
-- `runtime.txt`: Target runtime specification (`python-3.11.8`).
+- `wsgi.py`: Production WSGI entrypoint with automatic database table verification and seed fallback (`app = create_app()`).
+- `Procfile`: Process manager configuration declaring `web: gunicorn wsgi:app --workers 1 --threads 4 --timeout 60`.
+- `runtime.txt`: Locked Python target runtime (`python-3.11.8`).
+- `requirements.txt`: Pinned dependencies including `gunicorn>=21.2.0`, `Flask>=3.0.0`, and `Flask-SQLAlchemy>=3.1.0`.
 
-### Recommended Cloud Platforms
-- **Render.com / Railway.app / Fly.io**: Standard containerized deployment using the included `Procfile` and `wsgi.py`.
-- **PythonAnywhere**: Native WSGI hosting pointing to `wsgi.py:app`.
+### Production Environment Variables Reference
+
+| Variable Name | Required? | Recommended Production Value | Description |
+| :--- | :---: | :--- | :--- |
+| `FLASK_ENV` | **Yes** | `production` | Enforces production security checks and disables debug mode. |
+| `SECRET_KEY` | **Yes** | *(Generate via `python -c "import secrets; print(secrets.token_hex(32))"`)* | Cryptographic key for session cookies and CSRF protection. In production, application will raise `RuntimeError` if missing. |
+| `SESSION_COOKIE_SECURE` | **Yes** | `true` | Ensures authentication cookies are only transmitted over secure HTTPS connections. |
+| `DATABASE_URL` | Optional | `postgresql://user:pass@host/db` | Defaults to SQLite (`sqlite:///instance/resourcebridge.db`). If connecting managed PostgreSQL, automatically normalizes legacy `postgres://` prefixes. |
+| `PYTHON_VERSION` | Optional | `3.11.8` | Declares Python runtime for buildpacks. |
+
+---
+
+### Step-by-Step Deployment Guide: Render.com (Recommended Free Tier)
+
+Render provides a 100% free Web Service tier with automatic SSL/TLS (`https://*.onrender.com`), native GitHub integration, and zero credit card requirement:
+
+1. **Sign In & Create Web Service**:
+   - Navigate to [Render Dashboard](https://dashboard.render.com).
+   - Click **New +** -> **Web Service**.
+   - Connect your GitHub account and select repository: `syedhamzah-dev/resourcebridge`.
+
+2. **Configure Service Details**:
+   - **Name**: `resourcebridge` (or custom subdomain)
+   - **Region**: Choose closest to your judges (e.g., Frankfurt, Oregon, Singapore)
+   - **Branch**: `main`
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt && flask init-db`
+   - **Start Command**: `gunicorn wsgi:app --workers 1 --threads 4 --timeout 60`
+   - **Instance Type**: `Free`
+
+3. **Set Environment Variables** (Under *Advanced* -> *Add Environment Variable*):
+   - `FLASK_ENV` = `production`
+   - `SECRET_KEY` = `<paste-your-generated-64-character-hex-string>`
+   - `SESSION_COOKIE_SECURE` = `true`
+   - `PYTHON_VERSION` = `3.11.8`
+
+4. **Deploy**:
+   - Click **Create Web Service**. Render will build and deploy the container in ~2 minutes.
+   - Upon completion, your live URL will be: `https://<service-name>.onrender.com`.
+
+5. **Verify Live Deployment**:
+   - Check Health Endpoint: `curl -I https://<service-name>.onrender.com/health` (Returns HTTP 200 `{"status": "healthy", ...}`).
+   - Verify Catalog: Open `https://<service-name>.onrender.com` in your browser.
+   - Test Demo Login: Navigate to `/login` and test 1-Click Demo Profiles.
+
+---
+
+### Alternative Deployment Options
+
+- **Railway.app**:
+  1. Click **New Project** -> **Deploy from GitHub repo**.
+  2. Add environment variables (`FLASK_ENV=production`, `SECRET_KEY=...`).
+  3. Railway auto-detects `Procfile` and assigns a public `*.up.railway.app` URL.
+
+- **PythonAnywhere (Native Persistent SQLite)**:
+  1. Open a Web app on PythonAnywhere (Manual configuration, Python 3.11).
+  2. Clone repository into `~/resourcebridge`.
+  3. Point the WSGI configuration file to `from wsgi import app as application`.
+  4. Native persistent disk preserves SQLite across all restarts without container wipes.
+
+---
 
 ### Honest Technical Disclosures: SQLite Persistence & Concurrency
 1. **SQLite Ephemeral Filesystem Warning**:
-   Standard free-tier cloud containers (e.g., Render Free, Heroku Dynos) operate on ephemeral filesystems. Any writes to `instance/resourcebridge.db` will reset upon container restart or redeployment unless a persistent disk volume is mounted (e.g., Render Persistent Disk mounted at `/var/data` or Railway persistent volume). For high-scale multi-user deployments, configuring PostgreSQL (`SQLALCHEMY_DATABASE_URI=postgresql://...`) is strongly advised.
+   Standard free-tier cloud containers (e.g., Render Free, Heroku Dynos) operate on ephemeral filesystems. Any writes to `instance/resourcebridge.db` will reset upon container restart or redeployment unless a persistent disk volume is mounted (e.g., Render Persistent Disk mounted at `/var/data` or Railway persistent volume).
+   *Built-in Mitigation:* ResourceBridge's `wsgi.py` automatically checks and seeds the complete demo state (Student, Manager, Admin, 4 core campus resources, sample bookings) on every container cold start, ensuring hackathon judges always land on a pristine, fully populated working demo! For long-term multi-user production, connecting a managed PostgreSQL database via `DATABASE_URL` is recommended.
 2. **Process-Level Locking vs. Distributed Locking**:
-   The current race-condition prevention utilizes an in-memory `threading.Lock` within `approve_booking`. This completely prevents multi-threaded double-booking within a single application process (`gunicorn -w 1` or single-worker containers). In a multi-worker or multi-server distributed cluster (`gunicorn -w 4`), distributed database locking (such as PostgreSQL `SELECT ... FOR UPDATE`) or Redis-based distributed locks should be utilized.
+   The current race-condition prevention utilizes an in-memory `threading.Lock` within `approve_booking`. Running Gunicorn with `--workers 1 --threads 4` guarantees that all concurrent requests are processed within a single Python process, fully preventing double-bookings. In horizontally scaled multi-worker or multi-server distributed clusters (`gunicorn -w 4`), distributed database locking (such as PostgreSQL `SELECT ... FOR UPDATE`) or Redis-based distributed locks should be utilized.
 
 ---
 
