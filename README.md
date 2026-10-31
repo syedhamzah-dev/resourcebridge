@@ -3,6 +3,7 @@
 > **Campus Resource Sharing Network with Trust, Safety, and Physical Accountability**
 > *A secure, full-stack college resource management platform built for hackathon demonstration.*
 
+[![Live Demo](https://img.shields.io/badge/Render-Live%20Demo-brightgreen?logo=render)](https://resourcebridge-79f6.onrender.com)
 [![Tests](https://img.shields.io/badge/tests-69%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Flask](https://img.shields.io/badge/flask-3.0%2B-black.svg)]()
@@ -245,6 +246,14 @@ For local hackathon demonstrations, the database is pre-populated with three dis
 ---
 
 ## ☁️ 10. Deployment Configuration & Persistence Disclosures
+
+### 🌐 Verified Live Hackathon Deployment
+- **Live Public URL**: 👉 **[https://resourcebridge-79f6.onrender.com](https://resourcebridge-79f6.onrender.com)**
+- **Health Check Endpoint**: [https://resourcebridge-79f6.onrender.com/health](https://resourcebridge-79f6.onrender.com/health) (`HTTP 200 OK`, `{"status": "healthy", "database": "connected"}`)
+- **Hosting Platform**: Render.com (Cloud Web Service, Native GitHub Integration)
+- **Deployment Architecture**: Gunicorn 21.2 (`--workers 1 --threads 4 --timeout 60`) on Python 3.11.8
+- **Security & Transport**: Enforced TLS/HTTPS, `SESSION_COOKIE_SECURE=True`, `HttpOnly`, `SameSite=Lax`, HTTP security headers (`nosniff`, `SAMEORIGIN`, `X-XSS-Protection`)
+- **Live Multi-Role Verification**: Verified live HTTP authentication and dashboard access across Student (Alex Rivera), Facility Manager (Dr. Elena Vance), and System Admin (Marcus Brody).
 
 ### Production WSGI Server Configuration
 The repository includes standard production deployment artifacts:
