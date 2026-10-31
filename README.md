@@ -4,7 +4,7 @@
 > *A secure, full-stack college resource management platform built for hackathon demonstration.*
 
 [![Live Demo](https://img.shields.io/badge/Render-Live%20Demo-brightgreen?logo=render)](https://resourcebridge-79f6.onrender.com)
-[![Tests](https://img.shields.io/badge/tests-69%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-70%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Flask](https://img.shields.io/badge/flask-3.0%2B-black.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
@@ -207,7 +207,7 @@ Open your browser and navigate to:
 
 ## 🧪 8. Running the Automated Test Suite
 
-ResourceBridge includes an exhaustive regression and security test suite covering **69 test cases**:
+ResourceBridge includes an exhaustive regression and security test suite covering **70 test cases**:
 
 ```bash
 # Run all tests with verbose output
@@ -223,7 +223,7 @@ python -m pytest tests/test_auth.py -v
 ```
 
 ### Current Test Suite Summary
-- **Total Tests**: **69 passed** (0 failed, 0 skipped)
+- **Total Tests**: **70 passed** (0 failed, 0 skipped)
 - **Execution Runtime**: ~35 seconds
 - **Code Coverage Areas**: Authentication, role escalation defense, CSRF token verification, open redirect mitigation, session cookie parameters, HTTP defense headers, object-level privacy authorization, conflict detection, physical condition tracking, incident escalation, multi-threaded race conditions, and frontend redesign layout, and health monitoring endpoint (/health).
 

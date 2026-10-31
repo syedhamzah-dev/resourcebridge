@@ -110,6 +110,40 @@ def test_public_registration_success(client, app):
         assert user.role == "student"
 
 
+def test_new_registration_first_login_welcome_message(client, app):
+    """Ensure newly registered user gets 'Welcome to ResourceBridge' and subsequent logins get 'Welcome back'."""
+    # 1. Register new student
+    reg_res = client.post('/register', data={
+        'name': 'Taylor Green',
+        'email': 'taylor@campus.edu',
+        'password': 'TaylorPass123!',
+        'confirm_password': 'TaylorPass123!'
+    }, follow_redirects=True)
+    assert reg_res.status_code == 200
+    assert b"Your student account was created successfully" in reg_res.data
+    assert b'value="taylor@campus.edu"' in reg_res.data
+
+    # 2. First login right after registration
+    first_login = client.post('/login', data={
+        'email': 'taylor@campus.edu',
+        'password': 'TaylorPass123!'
+    }, follow_redirects=True)
+    assert first_login.status_code == 200
+    assert b"Welcome to ResourceBridge, Taylor Green!" in first_login.data
+    assert b"Welcome back, Taylor Green!" not in first_login.data
+
+    # 3. Logout
+    client.get('/logout', follow_redirects=True)
+
+    # 4. Second login as returning user
+    second_login = client.post('/login', data={
+        'email': 'taylor@campus.edu',
+        'password': 'TaylorPass123!'
+    }, follow_redirects=True)
+    assert second_login.status_code == 200
+    assert b"Welcome back, Taylor Green!" in second_login.data
+
+
 def test_public_registration_cannot_escalate_role(client, app):
     """Ensure public users cannot self-assign manager or admin roles."""
     # Attempt to inject role=admin and role=manager

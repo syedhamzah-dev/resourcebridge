@@ -319,8 +319,9 @@ def create_app(test_config=None):
                 )
                 db.session.add(new_user)
                 db.session.commit()
+                session['is_new_registration'] = True
                 flash("Your student account was created successfully! Please log in below.", "success")
-                return redirect(url_for('login'))
+                return redirect(url_for('login', registered_email=email))
             except Exception:
                 db.session.rollback()
                 flash("An unexpected error occurred while creating your account. Please try again.", "danger")
@@ -353,7 +354,10 @@ def create_app(test_config=None):
                 return render_template('login.html', email=email)
 
             login_user(user, remember=remember)
-            flash(f"Welcome back, {user.name}! Signed in as {user.role_title}.", "success")
+            if session.pop('is_new_registration', False):
+                flash(f"Welcome to ResourceBridge, {user.name}! Signed in as {user.role_title}.", "success")
+            else:
+                flash(f"Welcome back, {user.name}! Signed in as {user.role_title}.", "success")
 
             # Safe redirection to target page if specified (open redirect defense)
             next_page = request.args.get('next')
@@ -361,7 +365,8 @@ def create_app(test_config=None):
                 next_page = url_for('dashboard')
             return redirect(next_page)
 
-        return render_template('login.html')
+        initial_email = request.args.get('registered_email', '')
+        return render_template('login.html', email=initial_email)
 
     @app.route('/logout')
     @login_required
