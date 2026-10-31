@@ -5,9 +5,11 @@
 {% block content %}
 <div class="container py-6 text-center">
     <div class="empty-state-card">
-        <div class="empty-icon" style="font-size: 3rem;">🛡️</div>
+        <div class="empty-icon-wrap mb-3 text-danger" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        </div>
         <h1 class="page-title mt-2">Access Restricted (403)</h1>
-        <p class="text-muted max-w-500 mx-auto mt-2">
+        <p class="text-secondary max-w-500 mx-auto mt-2 text-sm">
             You do not have the required permissions or departmental role to access this area, manage this reservation, or perform this administrative action.
         </p>
         <div class="mt-4">

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-container py-5">
     <div class="container">
-        
+
         <!-- Breadcrumb Navigation -->
         <nav class="breadcrumb-nav mb-4" aria-label="breadcrumb">
             <ol class="breadcrumb-list">
@@ -92,7 +92,7 @@
                                                 </a>
                                             </strong>
                                             <div class="text-xs text-muted">
-                                                📍 {{ b.resource.location }} &bull; {{ b.resource.category }}
+                                                {{ b.resource.location }} &bull; {{ b.resource.category }}
                                             </div>
                                         </td>
                                         <td>
@@ -176,11 +176,13 @@
             </div>
         {% else %}
             <!-- Empty State -->
-            <div class="card text-center py-5 shadow-sm border-0">
+            <div class="card text-center py-5">
                 <div class="card-body">
-                    <div class="empty-icon mb-3" style="font-size: 3rem;">📅</div>
+                    <div class="empty-icon-wrap mb-3" aria-hidden="true">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    </div>
                     <h3>No reservation requests found</h3>
-                    <p class="text-muted max-w-md mx-auto mb-4">
+                    <p class="text-secondary max-w-500 mx-auto mb-4 text-sm">
                         {% if status_filter and status_filter != 'all' %}
                             You do not currently have any bookings in '{{ status_filter }}' status.
                         {% else %}

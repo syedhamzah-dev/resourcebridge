@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-container py-5">
     <div class="container">
-        
+
         <!-- Breadcrumb Navigation -->
         <nav class="breadcrumb-nav mb-4" aria-label="breadcrumb">
             <ol class="breadcrumb-list">
@@ -100,7 +100,7 @@
                                                 </a>
                                             </strong>
                                             <div class="text-xs text-muted">
-                                                📍 {{ b.resource.location }}
+                                                {{ b.resource.location }}
                                             </div>
                                             <div>
                                                 <span class="badge {{ b.resource.status_badge_class }} text-xs">
@@ -131,7 +131,7 @@
                                         </td>
                                         <td style="max-width: 280px;">
                                             <p class="text-sm mb-1 text-break">"{{ b.purpose }}"</p>
-                                            
+
                                             <!-- Prerequisite Indicators -->
                                             <div class="prereq-badges-stack">
                                                 {% if b.resource.training_required %}
@@ -141,7 +141,7 @@
                                                 {% endif %}
                                                 {% if b.resource.supervision_required %}
                                                     <span class="badge badge-purple text-xs" title="{{ b.resource.supervision_details }}">
-                                                        👥 Supervised: {{ b.resource.supervision_details or 'Required' }}
+                                                        Supervised: {{ b.resource.supervision_details or 'Required' }}
                                                     </span>
                                                 {% endif %}
                                             </div>
@@ -232,11 +232,13 @@
             </div>
         {% else %}
             <!-- Empty State -->
-            <div class="card text-center py-5 shadow-sm border-0">
+            <div class="card text-center py-5">
                 <div class="card-body">
-                    <div class="empty-icon mb-3" style="font-size: 3rem;">📋</div>
+                    <div class="empty-icon-wrap mb-3" aria-hidden="true">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                    </div>
                     <h3>Queue is clear</h3>
-                    <p class="text-muted max-w-md mx-auto mb-4">
+                    <p class="text-secondary max-w-500 mx-auto mb-4 text-sm">
                         {% if status_filter and status_filter != 'all' %}
                             No reservations found matching status '{{ status_filter }}'.
                         {% else %}

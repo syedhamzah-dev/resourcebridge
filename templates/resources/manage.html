@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container py-5">
-    
+
     <div class="manage-header-row">
         <div>
             <nav class="breadcrumb-nav mb-2" aria-label="breadcrumb">
@@ -101,10 +101,12 @@
                     </table>
                 </div>
             {% else %}
-                <div class="empty-state-card">
-                    <div class="empty-icon">📦</div>
+                <div class="empty-state-card py-5">
+                    <div class="empty-icon-wrap mb-3" aria-hidden="true">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                    </div>
                     <h3>No Managed Resources Yet</h3>
-                    <p class="text-muted">
+                    <p class="text-secondary max-w-500 mx-auto text-sm">
                         You have not registered any equipment or space resources under your account. Click below to add your first resource.
                     </p>
                     <div class="mt-4">

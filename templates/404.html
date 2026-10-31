@@ -5,9 +5,11 @@
 {% block content %}
 <div class="container py-6 text-center">
     <div class="empty-state-card">
-        <div class="empty-icon">🔍</div>
-        <h1 class="page-title mt-2">Resource Not Found</h1>
-        <p class="text-muted max-w-500 mx-auto mt-2">
+        <div class="empty-icon-wrap mb-3 text-muted" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </div>
+        <h1 class="page-title mt-2">Resource Not Found (404)</h1>
+        <p class="text-secondary max-w-500 mx-auto mt-2 text-sm">
             The resource ID or page you requested could not be found in the ResourceBridge catalog. It may have been relocated, archived, or entered incorrectly.
         </p>
         <div class="mt-4">

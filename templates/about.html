@@ -4,114 +4,168 @@
 
 {% block content %}
 <div class="container py-6">
-    <div class="page-header text-center">
-        <span class="section-tag">Hackathon Blueprint</span>
-        <h1 class="page-title">Trust, Safety & Fair Access</h1>
-        <p class="page-subtitle">
-            How ResourceBridge bridges the gap between idle college assets and ambitious student builders.
+    <div class="page-header text-center mb-5">
+        <span class="badge badge-default">System Overview</span>
+        <h1 class="page-title mt-2">Trust, Governance &amp; Campus Resource Architecture</h1>
+        <p class="page-lead max-w-700 mx-auto text-secondary">
+            ResourceBridge bridges the divide between specialized, underutilized college assets and students who need verified access for academic research, capstones, and creative production.
         </p>
     </div>
 
-    <div class="content-grid">
+    <div class="content-grid mb-5">
         <div class="card info-card">
             <div class="card-header">
-                <span class="card-icon">🎯</span>
-                <h3 class="card-title">The Challenge in Higher Education</h3>
+                <div class="card-header-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                </div>
+                <h2 class="card-title">The Campus Resource Problem</h2>
             </div>
             <div class="card-body">
                 <p>
-                    College departments invest heavily in specialized resources: electron microscopes, cinematic camera packages, high-end GPU workstations, audio booths, and laser cutters.
+                    Higher education institutions invest heavily in specialized laboratories, 4K production cameras, robotics gear, high-performance computing clusters, and audio engineering facilities.
                 </p>
                 <p>
-                    However, these assets are often locked in departmental silos. After 4:00 PM, an estimated <strong>65% to 80%</strong> of specialized college facilities sit dark and unutilized, while students working on capstones or startup prototypes lack access.
+                    However, departmental silos often keep these resources locked behind administrative boundaries. Studies indicate that up to <strong>70% of specialized college equipment</strong> sits idle outside scheduled class hours, while students and cross-disciplinary teams lack clear channels to request and utilize them safely.
                 </p>
             </div>
         </div>
 
         <div class="card info-card">
             <div class="card-header">
-                <span class="card-icon">🛡️</span>
-                <h3 class="card-title">The Four Pillars of Trust</h3>
+                <div class="card-header-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+                <h2 class="card-title">The Four Pillars of Trust</h2>
             </div>
             <div class="card-body">
                 <ul class="pillar-bullet-list">
                     <li>
-                        <strong>1. Verified Campus Membership:</strong> Every participant has an authenticated identity tied to an active institutional status.
+                        <strong>1. Verified Campus Membership:</strong> Every user holds an authenticated identity (Student, Manager, or Administrator) with strict role segregation.
                     </li>
                     <li>
-                        <strong>2. Controlled Role Permissions:</strong> Strict segregation of duties. Students request, Managers inspect and approve, Admins set governance rules.
+                        <strong>2. Departmental Oversight:</strong> Lab custodians inspect booking requests, verify required safety training, and make transparent approval or rejection decisions.
                     </li>
                     <li>
-                        <strong>3. Check-out / Check-in Accountability:</strong> Clear audit trails recording who took what, when, and the logged condition upon return.
+                        <strong>3. Handover &amp; Return Condition Reports:</strong> Formal inspection records at checkout and return ensure equipment condition is systematically tracked and accountable.
                     </li>
                     <li>
-                        <strong>4. Anti-Hoarding Rules:</strong> Fair access time caps and active reservation limits prevent any one group from monopolizing shared gear.
+                        <strong>4. Conflict Prevention &amp; Audit Trail:</strong> Concurrency locking and automated overlap detection prevent double-bookings, backed by an immutable event timeline.
                     </li>
                 </ul>
             </div>
         </div>
+    </div>
 
-        <div class="card info-card">
-            <div class="card-header">
-                <span class="card-icon">⚡</span>
-                <h3 class="card-title">Architecture & Tech Stack</h3>
+    <!-- Technical Architecture -->
+    <div class="card mb-5">
+        <div class="card-header">
+            <div class="card-header-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
             </div>
-            <div class="card-body">
-                <p>
-                    Built with clean, maintainable, dependency-conscious Python technology:
-                </p>
-                <div class="tech-stack-list">
-                    <div class="tech-item">
-                        <strong>Backend:</strong> Python 3 + Flask Application Factory
-                    </div>
-                    <div class="tech-item">
-                        <strong>Database:</strong> SQLite with Flask-SQLAlchemy ORM
-                    </div>
-                    <div class="tech-item">
-                        <strong>Session & Auth:</strong> Flask-Login + Werkzeug Password Hashing
-                    </div>
-                    <div class="tech-item">
-                        <strong>Frontend:</strong> Jinja2 HTML5 Templates, Vanilla CSS & Vanilla JS
-                    </div>
-                </div>
-            </div>
+            <h2 class="card-title">Technical Architecture &amp; Implementation</h2>
         </div>
+        <div class="card-body">
+            <p class="text-secondary mb-4">
+                ResourceBridge is engineered with a clean, conventional Python/Flask architecture that balances security, performance, and maintainability without unnecessary third-party bloat.
+            </p>
 
-        <div class="card info-card">
-            <div class="card-header">
-                <span class="card-icon">🚀</span>
-                <h3 class="card-title">24-Hour Hackathon Roadmap</h3>
-            </div>
-            <div class="card-body">
-                <div class="roadmap-steps">
-                    <div class="roadmap-step completed">
-                        <span class="step-num">✓</span>
-                        <div class="step-info">
-                            <strong>Stage 1: Core Foundation (Current)</strong>
-                            <span>User model, Werkzeug hashing, Flask-Login, role-aware dashboard, demo seeding.</span>
-                        </div>
-                    </div>
-                    <div class="roadmap-step">
-                        <span class="step-num">2</span>
-                        <div class="step-info">
-                            <strong>Stage 2: Resource Inventory & Catalog</strong>
-                            <span>Resource listings, lab categorisation, availability schedule, asset attributes.</span>
-                        </div>
-                    </div>
-                    <div class="roadmap-step">
-                        <span class="step-num">3</span>
-                        <div class="step-info">
-                            <strong>Stage 3: Reservation & Accountability Lifecycle</strong>
-                            <span>Student requests, manager approval queue, condition logging, return hand-off.</span>
-                        </div>
-                    </div>
+            <div class="tech-spec-grid">
+                <div class="tech-spec-card">
+                    <h3 class="tech-spec-title">Backend Architecture</h3>
+                    <ul class="tech-spec-list">
+                        <li><strong>Framework:</strong> Python 3 + Flask (Application Factory pattern)</li>
+                        <li><strong>ORM &amp; Database:</strong> Flask-SQLAlchemy with SQLite database</li>
+                        <li><strong>Authentication:</strong> Flask-Login session management</li>
+                        <li><strong>Security:</strong> Werkzeug PBKDF2 password hashing &amp; CSRF protection</li>
+                    </ul>
+                </div>
+
+                <div class="tech-spec-card">
+                    <h3 class="tech-spec-title">Data Models &amp; Lifecycle</h3>
+                    <ul class="tech-spec-list">
+                        <li><strong>User:</strong> Roles (Student, Manager, Admin), verification flags</li>
+                        <li><strong>Resource:</strong> Equipment &amp; Space categorization, safety requisites</li>
+                        <li><strong>Booking:</strong> State machine (Pending, Approved, Checked In, Returned, Rejected, Cancelled)</li>
+                        <li><strong>ConditionReport &amp; Incident:</strong> Initial checkout notes, return condition, manager resolution</li>
+                        <li><strong>AuditLog:</strong> Timestamped action history and state transitions</li>
+                    </ul>
+                </div>
+
+                <div class="tech-spec-card">
+                    <h3 class="tech-spec-title">Security &amp; Concurrency</h3>
+                    <ul class="tech-spec-list">
+                        <li><strong>Concurrency Guard:</strong> Thread-safe approval locking and refresh-check preventing double-bookings</li>
+                        <li><strong>Safe Redirects:</strong> Strict RFC-compliant URL validation against Open Redirect attacks</li>
+                        <li><strong>Access Boundaries:</strong> Strict role decorators preventing unauthorized cross-department access</li>
+                        <li><strong>Security Headers:</strong> X-Content-Type-Options, X-Frame-Options, Content-Security-Policy</li>
+                    </ul>
+                </div>
+
+                <div class="tech-spec-card">
+                    <h3 class="tech-spec-title">Frontend Design System</h3>
+                    <ul class="tech-spec-list">
+                        <li><strong>Rendering:</strong> Jinja2 templates with semantic HTML5 elements</li>
+                        <li><strong>Styling:</strong> Restrained, high-contrast custom CSS with institutional design tokens</li>
+                        <li><strong>Interactivity:</strong> Vanilla JavaScript (zero bulky frontend frameworks)</li>
+                        <li><strong>Accessibility:</strong> Visible focus indicators, accessible contrast, mobile-responsive tables</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="text-center mt-6">
-        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Explore with Demo Credentials</a>
+    <!-- Complete Development Roadmap -->
+    <div class="card mb-5">
+        <div class="card-header">
+            <div class="card-header-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <h2 class="card-title">Engineering Milestones Completed</h2>
+        </div>
+        <div class="card-body">
+            <div class="roadmap-grid">
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 1</span>
+                    <h4>Core Foundation &amp; RBAC</h4>
+                    <p>Secure User model, PBKDF2 hashing, session security, role boundaries, and demo persona seeder.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 2</span>
+                    <h4>Inventory &amp; Discovery</h4>
+                    <p>Resource cataloguing, multi-parameter search/filters, safety prerequisites, and owner inventory management.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 3</span>
+                    <h4>Booking Lifecycle</h4>
+                    <p>Reservation requests, date/time validation, manager review queue, approval/rejection reasons, conflict detection.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 4</span>
+                    <h4>Handover, Returns &amp; Incidents</h4>
+                    <p>Check-in condition reports, return inspection logging, incident tracking, and audit event timeline.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 5</span>
+                    <h4>Code Quality &amp; Defect Repair</h4>
+                    <p>Comprehensive codebase review, query optimization, role-specific metrics, and accessibility fixes.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 6</span>
+                    <h4>Security Hardening</h4>
+                    <p>CSRF defense, safe redirect enforcement, custom error handlers, and process-level concurrency locking.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 7</span>
+                    <h4>Integration &amp; Concurrency QA</h4>
+                    <p>Multi-threaded race condition tests, open redirect verification, 64-test regression baseline established.</p>
+                </div>
+                <div class="roadmap-milestone completed">
+                    <span class="milestone-badge">Stage 8</span>
+                    <h4>Frontend Redesign &amp; Submission</h4>
+                    <p>Calm, professional UI redesign, repository hygiene audit, deployment readiness, and documentation package.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

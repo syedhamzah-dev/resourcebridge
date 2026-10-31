@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}ResourceBridge - Share Underused College Resources With Accountability{% endblock %}
+{% block title %}ResourceBridge - Campus Resource Sharing Network{% endblock %}
 
 {% block content %}
 <div class="landing-page">
@@ -8,28 +8,54 @@
     <section class="hero-section">
         <div class="container hero-container">
             <div class="hero-content">
-                <div class="hero-pill">
-                    <span class="pulse-dot"></span>
-                    <span>College Resource Sharing Platform &bull; Hackathon Edition</span>
+                <div class="hero-tagline">
+                    <span class="badge badge-default">Institutional Resource Exchange</span>
+                    <span class="hero-status-pill">Active Campus System</span>
                 </div>
+
                 <h1 class="hero-title">
-                    Unlock Underused <span class="gradient-text">Campus Resources</span> for Every Student.
+                    Fair, Accountable Access to University Labs &amp; Equipment
                 </h1>
+
                 <p class="hero-description">
-                    High-end laboratory spaces, 4K cinema cameras, AI workstations, and seminar rooms often sit idle after hours.
-                    <strong>ResourceBridge</strong> connects qualified students with college equipment while maintaining complete trust, safety, and check-out accountability.
+                    ResourceBridge connects students and faculty with specialized departmental assets—high-performance computing workstations, cinematic cameras, robotics equipment, and fabrication labs—backed by transparent custody and return condition reports.
                 </p>
-                
+
+                <!-- Quick Search Bar -->
+                <div class="hero-search-box">
+                    <form method="GET" action="{{ url_for('resources_list') }}" class="hero-search-form">
+                        <div class="hero-search-input-wrap">
+                            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input
+                                type="text"
+                                name="q"
+                                class="hero-search-input"
+                                placeholder="Search by name, category, or location (e.g. 4K Camera, Cleanroom, GPU)..."
+                                aria-label="Search resources"
+                            >
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="hero-search-submit">
+                            <span>Search Catalogue</span>
+                        </button>
+                    </form>
+                </div>
+
                 <div class="hero-actions">
                     {% if current_user.is_authenticated %}
                         <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg" id="hero-dashboard-btn">
-                            <span>Open Your {{ current_user.role | capitalize }} Dashboard</span>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            <span>Open {{ current_user.role | capitalize }} Dashboard</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </a>
+                        <a href="{{ url_for('resources_list') }}" class="btn btn-outline btn-lg">
+                            <span>Browse Catalogue ({{ active_count }} Active)</span>
                         </a>
                     {% else %}
-                        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg" id="hero-register-btn">
-                            <span>Get Started as Student</span>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        <a href="{{ url_for('resources_list') }}" class="btn btn-primary btn-lg" id="hero-browse-btn">
+                            <span>Explore Resource Catalogue</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
                         </a>
                         <a href="{{ url_for('login') }}" class="btn btn-outline btn-lg" id="hero-login-btn">
                             <span>Sign In (Demo Accounts)</span>
@@ -37,139 +63,155 @@
                     {% endif %}
                 </div>
 
-                <div class="hero-stats">
-                    <div class="stat-item">
+                <!-- Live Campus Inventory Metrics -->
+                <div class="hero-stats-row">
+                    <div class="stat-cell">
+                        <span class="stat-number">{{ active_count }}</span>
+                        <span class="stat-label">Active Campus Resources</span>
+                    </div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-cell">
                         <span class="stat-number">3</span>
-                        <span class="stat-label">Security Roles</span>
+                        <span class="stat-label">Governed Roles (Student, Manager, Admin)</span>
                     </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat-item">
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-cell">
                         <span class="stat-number">100%</span>
-                        <span class="stat-label">Hashed Credentials</span>
-                    </div>
-                    <div class="stat-divider"></div>
-                    <div class="stat-item">
-                        <span class="stat-number">Zero</span>
-                        <span class="stat-label">Equipment Hoarding</span>
+                        <span class="stat-label">Inspection &amp; Audit Trail Logged</span>
                     </div>
                 </div>
             </div>
 
-            <div class="hero-graphic">
-                <div class="preview-card">
-                    <div class="preview-header">
-                        <div class="window-dots">
-                            <span class="dot red"></span>
-                            <span class="dot yellow"></span>
-                            <span class="dot green"></span>
-                        </div>
-                        <span class="preview-title">ResourceBridge Live Status</span>
-                        <span class="status-live">ONLINE</span>
+            <!-- Side Featured Resource Preview -->
+            <div class="hero-preview-panel">
+                <div class="preview-panel-header">
+                    <div class="panel-header-title">
+                        <span class="panel-dot" aria-hidden="true"></span>
+                        <span>Available in Campus Inventory</span>
                     </div>
-                    <div class="preview-body">
-                        {% if featured_resources %}
-                            {% for r in featured_resources %}
-                                <a href="{{ url_for('resource_detail', resource_id=r.id) }}" class="resource-preview-item">
-                                    <div class="resource-icon-badge">
-                                        {% if r.is_space %}🏢{% elif 'Camera' in r.category or 'AV' in r.category %}🎥{% elif 'Computer' in r.category %}⚡{% elif 'Workshop' in r.category %}🖨️{% else %}🔬{% endif %}
-                                    </div>
-                                    <div class="resource-preview-info">
-                                        <strong>{{ r.name }}</strong>
-                                        <span>{{ r.location }} &bull; {{ r.category }}</span>
-                                    </div>
-                                    <span class="badge {{ r.status_badge_class }}">{{ r.status_title }}</span>
-                                </a>
-                            {% endfor %}
-                        {% else %}
-                            <div class="resource-preview-item">
-                                <div class="resource-icon-badge">🔬</div>
-                                <div class="resource-preview-info">
-                                    <strong>Campus Resource Pool</strong>
-                                    <span>Database Ready</span>
+                    <a href="{{ url_for('resources_list') }}" class="panel-header-link">View All &rarr;</a>
+                </div>
+
+                <div class="preview-resource-list">
+                    {% if featured_resources %}
+                        {% for r in featured_resources %}
+                            <a href="{{ url_for('resource_detail', resource_id=r.id) }}" class="preview-resource-card">
+                                <div class="preview-card-top">
+                                    <span class="badge {{ r.type_badge_class }}">
+                                        {{ r.resource_type | capitalize }}
+                                    </span>
+                                    <span class="badge {{ r.status_badge_class }}">
+                                        {{ r.status_title }}
+                                    </span>
                                 </div>
-                                <span class="badge badge-success">Online</span>
-                            </div>
-                        {% endif %}
-                        <div class="text-center mt-2">
-                            <a href="{{ url_for('resources_list') }}" class="text-sm font-bold text-primary">
-                                View all {{ active_count }} active resources in catalogue &rarr;
+                                <h3 class="preview-card-title">{{ r.name }}</h3>
+                                <p class="preview-card-meta">
+                                    <span>{{ r.location }}</span>
+                                    <span class="meta-separator">&bull;</span>
+                                    <span>{{ r.category }}</span>
+                                </p>
+                                <div class="preview-card-footer">
+                                    <span class="preview-access-info">{{ r.availability_info }}</span>
+                                    <span class="preview-action-text">Inspect &rarr;</span>
+                                </div>
                             </a>
+                        {% endfor %}
+                    {% else %}
+                        <div class="preview-empty">
+                            <p>Campus resource pool is ready for reservations.</p>
+                            <a href="{{ url_for('resources_list') }}" class="btn btn-sm btn-outline">Explore Catalogue</a>
                         </div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Core Pillars Section -->
+    <!-- Platform Pillars -->
     <section class="pillars-section">
         <div class="container">
-            <div class="section-header text-center">
-                <span class="section-tag">Trust & Accountability</span>
-                <h2 class="section-title">Built for Real Campus Environments</h2>
-                <p class="section-subtitle">
-                    Colleges hesitate to lend expensive assets because of damage risks, loss, or favoritism. ResourceBridge solves this with structured safeguards.
+            <div class="section-heading text-center">
+                <span class="section-kicker">Accountability Architecture</span>
+                <h2 class="section-title">Designed for Real Campus Operations</h2>
+                <p class="section-lead">
+                    Academic departments frequently hesitate to share expensive equipment due to damage risks, unrecorded handovers, or scheduling conflicts. ResourceBridge addresses each concern directly through structured verification.
                 </p>
             </div>
 
             <div class="pillars-grid">
                 <div class="pillar-card">
-                    <div class="pillar-icon bg-blue">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    <div class="pillar-icon-wrap">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
                     </div>
-                    <h3>Identity & Trust</h3>
-                    <p>
-                        Every member is authenticated and verified. Students hold reputation scores that incentivize on-time returns and responsible handling.
+                    <h3 class="pillar-title">Verified Identity &amp; Roles</h3>
+                    <p class="pillar-text">
+                        Enforces clear boundaries: Students request resources within allowable guidelines; department managers inspect and approve requests; institutional administrators supervise system policies.
                     </p>
                 </div>
 
                 <div class="pillar-card">
-                    <div class="pillar-icon bg-emerald">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <div class="pillar-icon-wrap">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
                     </div>
-                    <h3>Fair Access Allocation</h3>
-                    <p>
-                        Prevents resource hoarding by research teams or departments. Time-capped booking slots ensure equitable access for all student projects.
+                    <h3 class="pillar-title">Conflict-Free Scheduling</h3>
+                    <p class="pillar-text">
+                        Automated overlap detection and concurrency locking prevent double-bookings. Manager review queues provide clear conflict warnings when competing requests target the same time slot.
                     </p>
                 </div>
 
                 <div class="pillar-card">
-                    <div class="pillar-icon bg-purple">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <div class="pillar-icon-wrap">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
                     </div>
-                    <h3>Departmental Oversight</h3>
-                    <p>
-                        Lab managers and faculty retain full control over approvals, prerequisite checks, and return condition inspections.
+                    <h3 class="pillar-title">Check-In &amp; Return Reports</h3>
+                    <p class="pillar-text">
+                        Equipment handovers require structured condition reports both at checkout and upon return. Any wear or damage is systematically documented before closing the reservation.
                     </p>
                 </div>
 
                 <div class="pillar-card">
-                    <div class="pillar-icon bg-amber">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <div class="pillar-icon-wrap">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
                     </div>
-                    <h3>End-to-End Lifecycle</h3>
-                    <p>
-                        From discovery and reservation to physical check-out, condition verification, and return reconciliation, no equipment slips through the cracks.
+                    <h3 class="pillar-title">Audit Trail &amp; Incidents</h3>
+                    <p class="pillar-text">
+                        Every state change—request, approval, handover, return condition inspection, and incident note—is recorded with timestamped audit entries accessible to both students and managers.
                     </p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Hackathon Stage Notice -->
-    <section class="stage-section">
+    <!-- Hackathon Evaluation / Demo Callout -->
+    <section class="demo-evaluation-section">
         <div class="container">
-            <div class="stage-banner">
-                <div class="stage-content">
-                    <span class="stage-badge">Current Milestone: Stage 1</span>
-                    <h3>Authentication, Role Security & Architecture Foundation</h3>
-                    <p>
-                        We have established the secure User model, password hashing, database initialization, role-aware dashboarding, and demo credential seeding.
+            <div class="evaluation-panel">
+                <div class="evaluation-content">
+                    <span class="badge badge-info">Evaluation &amp; Demo Ready</span>
+                    <h3 class="evaluation-title">Test the Full End-to-End Workflow</h3>
+                    <p class="evaluation-desc">
+                        Explore the student reservation experience, manager review queue, condition reporting, and incident resolution using pre-configured demonstration accounts with one click.
                     </p>
                 </div>
-                <div class="stage-action">
-                    <a href="{{ url_for('login') }}" class="btn btn-primary" id="stage-demo-btn">
-                        Try Demo Roles Now
+                <div class="evaluation-actions">
+                    <a href="{{ url_for('login') }}" class="btn btn-primary" id="btn-demo-start">
+                        <span>Sign In with Demo Persona</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </a>
+                    <a href="{{ url_for('about') }}" class="btn btn-outline">
+                        <span>Read Architecture Overview</span>
                     </a>
                 </div>
             </div>
