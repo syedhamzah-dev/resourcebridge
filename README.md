@@ -12,7 +12,7 @@
 
 ---
 
-### ⚡ Quick Access for Reviewers & Judges
+### Quick Access
 
 | Resource | Direct Link & Access Details |
 | :--- | :--- |
@@ -26,7 +26,7 @@
 
 ## 📑 Table of Contents
 
-- [⚡ Quick Access for Reviewers & Judges](#-quick-access-for-reviewers--judges)
+- [Quick Access](#quick-access)
 - [1. Project Overview](#1-project-overview)
 - [2. Problem Statement](#2-problem-statement)
 - [3. Solution](#3-solution)
