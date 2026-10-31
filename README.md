@@ -369,6 +369,7 @@ Verified through real automated Chromium browser execution against `https://reso
 | **Concurrency Locking Scope**<br>*(Process-Level Synchronization)* | The in-memory `threading.Lock` within `app.py` safely serializes booking approvals across concurrent threads within a single Python process (`gunicorn -w 1 --threads 4`). | **Scaling Path**: For horizontally scaled multi-worker clusters (`gunicorn -w 4`) or multi-server deployments, distributed row locking (`SELECT ... FOR UPDATE`) or Redis locks can be enabled. |
 | **Outbound Notifications**<br>*(Communication Channels)* | Booking approvals, condition reports, and incident tickets update the database and dashboard in real-time, but do not yet dispatch external email or SMS alerts. | **Roadmap Path**: Architected for plug-and-play integration with Celery/Redis background task workers and university SMTP relays without schema modifications. |
 | **Physical Handover Check-In**<br>*(Condition Intake Inspection)* | Condition reports (ratings 1–5 and mandatory descriptive notes) are recorded via authenticated web forms during in-person check-in and return handovers. | **Roadmap Path**: In a physical campus deployment, pairing this workflow with mobile camera QR barcode scanning will streamline physical equipment intake. |
+| **Preventive Maintenance Planning**<br>*(Historical Data Synthesis)* | Condition reports, incident tickets, and usage logs track individual loans, but are not yet aggregated into preventive maintenance trends. | **Roadmap Path**: Synthesize historical condition degradation and incident records to help managers schedule servicing and prioritize inspections based on objective data rather than automated blame. |
 
 ### Upgrading to Permanent Cloud PostgreSQL (3-Minute Setup)
 To persist custom user registrations and bookings permanently across Render container restarts:
@@ -380,6 +381,7 @@ To persist custom user registrations and bookings permanently across Render cont
 4. Save changes. ResourceBridge automatically normalizes dialect prefixes (`postgres://` $\rightarrow$ `postgresql://`), runs `db.create_all()`, and persists all live records permanently.
 
 ### Realistic Future Roadmap
+- **Maintenance Planning from Condition & Incident Records**: Utilizing accumulated condition reports, incident logs, and checkout history to help resource managers identify equipment that repeatedly returns damaged or requires attention. Rather than assigning automated blame or generating automated schedules, aggregated historical trends provide custodians with actionable insights to plan preventive maintenance, prioritize inspections, and allocate departmental repair budgets more effectively.
 - **Automated Alerts**: Email and SMS dispatch for reservation approvals and upcoming return reminders.
 - **Mobile QR Scanning**: Quick camera scanning for asset barcode tags during physical handover.
 - **Calendar Synchronization**: Export approved bookings to iCalendar (`.ics`) and Google Calendar.
