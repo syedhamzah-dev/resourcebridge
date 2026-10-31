@@ -371,14 +371,6 @@ Verified through real automated Chromium browser execution against `https://reso
 | **Physical Handover Check-In**<br>*(Condition Intake Inspection)* | Condition reports (ratings 1–5 and mandatory descriptive notes) are recorded via authenticated web forms during in-person check-in and return handovers. | **Roadmap Path**: In a physical campus deployment, pairing this workflow with mobile camera QR barcode scanning will streamline physical equipment intake. |
 | **Preventive Maintenance Planning**<br>*(Historical Data Synthesis)* | Condition reports, incident tickets, and usage logs track individual loans, but are not yet aggregated into preventive maintenance trends. | **Roadmap Path**: Synthesize historical condition degradation and incident records to help managers schedule servicing and prioritize inspections based on objective data rather than automated blame. |
 
-### Upgrading to Permanent Cloud PostgreSQL (3-Minute Setup)
-To persist custom user registrations and bookings permanently across Render container restarts:
-1. In the [Render Dashboard](https://dashboard.render.com), click **New +** $\rightarrow$ **PostgreSQL** (select the Free tier).
-2. Copy the generated **Internal Database URL** (e.g., `postgresql://user:pass@host/db`).
-3. In your Web Service settings $\rightarrow$ **Environment**, add:
-   - Key: `DATABASE_URL`
-   - Value: `<paste-copied-internal-database-url>`
-4. Save changes. ResourceBridge automatically normalizes dialect prefixes (`postgres://` $\rightarrow$ `postgresql://`), runs `db.create_all()`, and persists all live records permanently.
 
 ### Realistic Future Roadmap
 - **Maintenance Planning from Condition & Incident Records**: Utilizing accumulated condition reports, incident logs, and checkout history to help resource managers identify equipment that repeatedly returns damaged or requires attention. Rather than assigning automated blame or generating automated schedules, aggregated historical trends provide custodians with actionable insights to plan preventive maintenance, prioritize inspections, and allocate departmental repair budgets more effectively.
